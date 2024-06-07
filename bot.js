@@ -10,7 +10,7 @@ bot.help((ctx) => ctx.reply("Send me a sticker"));
 bot.hears("token", async (ctx) => {
   const user = ctx.from.id.toString();
   console.log(user);
-  const userd = await fetch("https://youtube-project-nu.vercel.app/details", {
+  const userd = await fetch("http://localhost:5050/details", {
     method: "POST",
     headers: {
       "Content-Type": "application/json",
