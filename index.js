@@ -3,7 +3,7 @@ import bot from "./bot.js";
 import "dotenv/config";
 import router from "./routes/routes.js";
 
-export const app = express();
+const app = express();
 const port = 3000;
 
 //middleware
