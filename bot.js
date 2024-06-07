@@ -10,7 +10,7 @@ bot.help((ctx) => ctx.reply("Send me a sticker"));
 bot.hears("token", async (ctx) => {
   const user = ctx.from.id.toString();
   console.log(user);
-  const userd = await fetch("http://localhost:3000/details", {
+  const userd = await fetch("https://youtube-project-nu.vercel.app/details", {
     method: "POST",
     headers: {
       "Content-Type": "application/json",
@@ -36,7 +36,7 @@ bot.on("video", async (ctx) => {
 
 bot.command("auth", (ctx) => {
   const id = ctx.from.id;
-  ctx.reply(`http://localhost:3000/auth?id=${id}`);
+  ctx.reply(`https://youtube-project-nu.vercel.app/auth?id=${id}`);
 });
 
 // Enable graceful stop

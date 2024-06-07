@@ -14,13 +14,16 @@ export default async function uploadVideo(ctx, file_id) {
 
   try {
     // Fetch user details
-    const userDetailsResponse = await fetch("http://localhost:3000/details", {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({ id: userId }),
-    });
+    const userDetailsResponse = await fetch(
+      "https://youtube-project-nu.vercel.app/details",
+      {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({ id: userId }),
+      }
+    );
 
     if (!userDetailsResponse.ok) {
       throw new Error(
