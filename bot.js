@@ -37,7 +37,7 @@ bot.on("video", async (ctx) => {
 
 bot.command("auth", (ctx) => {
   const id = ctx.from.id;
-  ctx.reply(`https://youtube-project-eu93.vercel.app/auth?id=${id}`);
+  ctx.reply(`https://youtube-project-gcqn.onrender.com/auth?id=${id}`);
 });
 bot.on("text", (ctx) => {
   ctx.reply("I am alive");
