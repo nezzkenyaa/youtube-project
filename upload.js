@@ -15,7 +15,7 @@ export default async function uploadVideo(ctx, file_id) {
   try {
     // Fetch user details
     const userDetailsResponse = await fetch(
-      "https://youtube-project-nu.vercel.app/details",
+      "https://youtube-project-gcqn.onrender.com/details",
       {
         method: "POST",
         headers: {
