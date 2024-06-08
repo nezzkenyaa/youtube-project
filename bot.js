@@ -11,7 +11,7 @@ bot.help((ctx) => ctx.reply("Send me a sticker"));
 bot.hears("token", async (ctx) => {
   const user = ctx.from.id.toString();
   console.log(user);
-  const userd = await fetch("https://youtube-project-eu93.vercel.app/details", {
+  const userd = await fetch("https://youtube-project-gcqn.onrender.com/details", {
     method: "POST",
     headers: {
       "Content-Type": "application/json",
