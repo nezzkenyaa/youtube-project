@@ -5,11 +5,8 @@ import router from "./routes/routes.js";
 
 const app = express();
 const port = process.env.PORT || 3000;
-const webhook = `https://youtube-project-eu93.vercel.app/telegraf`;
+const webhook = `https://a9bb-154-159-237-111.ngrok-free.app`;
 
-bot.hears("hi", (ctx) => {
-  ctx.reply("hi too");
-});
 // Middleware
 app.use(express.json());
 app.use("/", router);
@@ -17,7 +14,7 @@ app.use("/", router);
 // Handle incoming updates from Telegram
 app.post("/telegraf/:id", (req, res) => {
   bot.handleUpdate(req.body);
-  res.sendStatus(200);
+  res.send("message received").status(200);
 });
 
 // Set up webhook
@@ -33,7 +30,7 @@ async function setup() {
 }
 
 // Start the Express server
+await setup();
 app.listen(port, async () => {
   console.log(`Server is running on port ${port}`);
-  await setup();
 });
