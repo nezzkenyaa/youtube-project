@@ -15,7 +15,7 @@ export default async function uploadVideo(ctx, file_id) {
   try {
     // Fetch user details
     const userDetailsResponse = await fetch(
-      "https://youtube-project-gcqn.onrender.com/details",
+      "https://youtube-project-nu.vercel.app/details",
       {
         method: "POST",
         headers: {
@@ -38,7 +38,7 @@ export default async function uploadVideo(ctx, file_id) {
       throw new Error("User tokens not found");
     }
 
-    ctx.reply(`Access token found :rock:`);
+    ctx.reply(`Access token found :rock`);
     ctx.reply(`proceeding`);
     console.log("User tokens found, setting credentials");
 
@@ -64,7 +64,7 @@ export default async function uploadVideo(ctx, file_id) {
     // Download video file as a stream
     const fileResponse = await axios.get(
       `https://api.telegram.org/file/bot${process.env.TOKEN}/${fileLink}`,
-      { responseType: "stream"}
+      { responseType: "stream" }
     );
 
     const passThrough = new PassThrough();
