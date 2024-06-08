@@ -3,8 +3,8 @@ import { PassThrough } from "stream";
 import fetch from "node-fetch";
 import { oauth2Client } from "./googleAuth.js";
 import { google } from "googleapis";
-import fs from "fs";
-
+import db from "./connection.js";
+import saveTokens from "./SaveToken.js";
 export default async function uploadVideo(ctx, file_id) {
   console.log("Upload initiated");
   ctx.reply("Upload started");
@@ -38,7 +38,8 @@ export default async function uploadVideo(ctx, file_id) {
       throw new Error("User tokens not found");
     }
 
-    ctx.reply(`Access token: ${userTokens.access_token}`);
+    ctx.reply(`Access token found :rock`);
+    ctx.reply(`proceeding`);
     console.log("User tokens found, setting credentials");
 
     // Set OAuth2 credentials
@@ -91,11 +92,9 @@ export default async function uploadVideo(ctx, file_id) {
 
     console.log("Upload response:", youtubeResponse.data);
     ctx.reply("Video uploaded successfully");
+    await saveTokens(userId, userTokens);
 
-    // Store the updated tokens after upload
-    const updatedTokens = oauth2Client.credentials;
-    fs.writeFileSync(TOKEN_PATH, JSON.stringify(updatedTokens));
-    console.log("Updated tokens stored to", TOKEN_PATH);
+    console.log("Tokens saved to MongoDB");
   } catch (error) {
     console.error("Error uploading video:", error);
     ctx.reply(`Failed to upload video: ${error.message}`);

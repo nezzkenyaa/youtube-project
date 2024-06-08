@@ -20,7 +20,13 @@ router.get("/oauth2callback", async (req, res) => {
   try {
     const { tokens } = await oauth2Client.getToken(code);
     console.log(`Received tokens for user ID: ${userId}`, tokens);
+
+    // Set refresh token in oauth2Client
+    oauth2Client.setCredentials(tokens);
+
+    // Assuming you have a function to save tokens to MongoDB
     await saveTokens(userId, tokens);
+
     res.send(
       "Authentication successful! You can now use the bot to upload videos."
     );
