@@ -18,7 +18,7 @@ app.post("/telegram-webhook", (req, res) => {
 
 // Set the bot API endpoint
 bot.telegram
-  .setWebhook("https://077d-154-159-237-111.ngrok-free.app/telegram-webhook")
+  .setWebhook("https://youtube-project-eu93.vercel.app/telegram-webhook")
   .then(() => {
     console.log("Webhook set successfully");
   })
