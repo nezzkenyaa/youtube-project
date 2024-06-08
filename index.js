@@ -32,7 +32,7 @@ async function setup() {
 }
 
 // Start the Express server
-await setup();
 app.listen(port, async () => {
+await setup();
   console.log(`Server is running on port ${port}`);
 });
