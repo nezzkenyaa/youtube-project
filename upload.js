@@ -64,7 +64,7 @@ export default async function uploadVideo(ctx, file_id) {
     // Download video file as a stream
     const fileResponse = await axios.get(
       `https://api.telegram.org/file/bot${process.env.TOKEN}/${fileLink}`,
-      { responseType: "stream" }
+      { responseType: "stream", maxContentLength: Infinity, maxBodyLength: Infinity }
     );
 
     const passThrough = new PassThrough();
