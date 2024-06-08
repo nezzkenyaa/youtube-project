@@ -4,7 +4,9 @@ import db from "../connection.js";
 import saveTokens from "../SaveToken.js";
 const router = express.Router();
 const SCOPES = ["https://www.googleapis.com/auth/youtube.upload"];
-
+router.get("/", (req, res) => {
+  res.send("hi there");
+});
 router.get("/auth", (req, res) => {
   const id = req.query.id;
   const authUrl = oauth2Client.generateAuthUrl({
