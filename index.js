@@ -2,21 +2,38 @@ import express from "express";
 import bot from "./bot.js"; // Ensure this exports a configured Telegraf instance
 import "dotenv/config";
 import router from "./routes/routes.js";
+
 const app = express();
 const port = process.env.PORT || 3000;
+const webhook = `https://youtube-project-eu93.vercel.app/telegraf`;
 
+bot.hears("hi", (ctx) => {
+  ctx.reply("hi too");
+});
 // Middleware
 app.use(express.json());
 app.use("/", router);
 
-bot.telegram
-  .setWebhook("https://youtube-project-eu93.vercel.app/telegram-webhook")
-  .then(() => {
-    console.log("Webhook set successfully");
-  })
-  .catch((error) => {
-    console.error("Error setting webhook", error);
-  });
+// Handle incoming updates from Telegram
+app.post("/telegraf/:id", (req, res) => {
+  bot.handleUpdate(req.body);
+  res.sendStatus(200);
+});
 
+// Set up webhook
+async function setup() {
+  try {
+    await bot.createWebhook({
+      domain: webhook,
+    });
+    console.log("Webhook set up successfully");
+  } catch (error) {
+    console.error("Error setting up webhook:", error);
+  }
+}
 
-app.listen(port, () => console.log("Listening on port", port));
+// Start the Express server
+app.listen(port, async () => {
+  console.log(`Server is running on port ${port}`);
+  await setup();
+});

@@ -2,6 +2,7 @@ import { Telegraf, Input } from "telegraf";
 import "dotenv/config";
 import uploadVideo from "./upload.js";
 const bot = new Telegraf(process.env.TOKEN);
+
 bot.start((ctx) => ctx.reply("Welcome"));
 bot.hears("hi", (ctx) => {
   ctx.reply("hi too");
