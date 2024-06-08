@@ -38,8 +38,8 @@ export default async function uploadVideo(ctx, file_id) {
       throw new Error("User tokens not found");
     }
 
-    ctx.reply(`Access token found :rock`);
-    ctx.reply(`proceeding`);
+    ctx.reply(`Access token found :rocket:`);
+    ctx.reply(`proceeding :rocket: :rocket:`);
     console.log("User tokens found, setting credentials");
 
     // Set OAuth2 credentials
