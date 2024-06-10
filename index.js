@@ -6,12 +6,11 @@ import bodyParser from 'body-parser';
 
 const app = express();
 const port = process.env.PORT || 3000;
-const webhook = `https://youtube-project-gcqn.onrender.com`;
+const webhook = process.env.BASE_URL;
 
 // Middleware
+app.use(express.json())
 app.use("/", router);
-app.use(bodyParser.json({ limit: '2000mb' }));
-app.use(bodyParser.urlencoded({ limit: '2000mb', extended: true}));
 
 // Handle incoming updates from Telegram
 app.post("/telegraf/:id", (req, res) => {

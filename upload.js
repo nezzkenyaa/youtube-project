@@ -5,7 +5,8 @@ import { oauth2Client } from "./googleAuth.js";
 import { google } from "googleapis";
 import db from "./connection.js";
 import saveTokens from "./SaveToken.js";
-export default async function uploadVideo(ctx, file_id) {
+
+export default async function uploadVideo(ctx, file_id, link) {
   console.log("Upload initiated");
   ctx.reply("Upload started");
 
@@ -15,7 +16,7 @@ export default async function uploadVideo(ctx, file_id) {
   try {
     // Fetch user details
     const userDetailsResponse = await fetch(
-      "https://youtube-project-gcqn.onrender.com/details",
+      `${process.env.BASE_URL}/details`,
       {
         method: "POST",
         headers: {
@@ -47,25 +48,41 @@ export default async function uploadVideo(ctx, file_id) {
 
     console.log("Getting file link");
 
-    // Fetch file link using Axios
-    const fileLinkResponse = await axios.get(
-      `https://api.telegram.org/bot${process.env.TOKEN}/getFile?file_id=${file_id}`
-    );
+    let fileLink;
 
-    if (fileLinkResponse.data.ok !== true) {
-      throw new Error("Failed to fetch file link from Telegram");
+    if (file_id) {
+      // Fetch file link using Axios if file_id is provided
+      const fileLinkResponse = await axios.get(
+        `https://api.telegram.org/bot${process.env.TOKEN}/getFile?file_id=${file_id}`
+      );
+
+      if (fileLinkResponse.data.ok !== true) {
+        throw new Error("Failed to fetch file link from Telegram");
+      }
+
+      fileLink = fileLinkResponse.data.result.file_path;
+    } else if (link) {
+      // If link is provided, use it directly
+      fileLink = link;
+    } else {
+      throw new Error("No file ID or link provided");
     }
 
-    const fileLink = fileLinkResponse.data.result.file_path;
     console.log(`File link: ${fileLink}`);
 
     console.log("Downloading video file");
-
+var fileResponse;
     // Download video file as a stream
-    const fileResponse = await axios.get(
-      `https://api.telegram.org/file/bot${process.env.TOKEN}/${fileLink}`,
-      { responseType: "stream" }
-    );
+    if(file_id){
+      var fileResponse = await axios.get(
+        `https://api.telegram.org/file/bot${process.env.TOKEN}/${fileLink}`,
+        { responseType: "stream" }
+      );
+    }else{
+      var fileResponse = await axios.get(link,{
+        responseType: "stream"
+      })
+    }
 
     const passThrough = new PassThrough();
     fileResponse.data.pipe(passThrough);

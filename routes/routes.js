@@ -3,7 +3,7 @@ import { oauth2Client } from "../googleAuth.js";
 import db from "../connection.js";
 import saveTokens from "../SaveToken.js";
 const router = express.Router();
-const SCOPES = ["https://www.googleapis.com/auth/youtube.upload"];
+const SCOPES = ["https://www.googleapis.com/auth/youtube"];
 router.get("/", (req, res) => {
   res.send("hi there");
 });
