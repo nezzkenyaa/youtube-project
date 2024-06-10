@@ -38,7 +38,7 @@ bot.on("video", async (ctx) => {
 
 bot.hears("auth", (ctx) => {
   const id = ctx.from.id;
-  ctx.reply(`https://super-garbanzo-6w645q74gqr26vq-3000.app.github.dev/auth?id=${id}`);
+  ctx.reply(`${process.env.BASE_URL}/auth?id=${id}`);
 });
 
 // Function to validate URLs
