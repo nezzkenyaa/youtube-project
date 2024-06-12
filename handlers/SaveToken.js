@@ -1,4 +1,4 @@
-import db from "./connection.js";
+import db from "../database/connection.js";
 async function saveTokens(userId, tokens) {
   try {
     const collection = db.collection("oauth_tokens");

@@ -9,6 +9,8 @@
     "body-parser": "^1.20.2",
     "dotenv": "^16.4.5",
     "express": "^4.19.2",
+    "ffmpeg-static": "^5.2.0",
+    "firebase-admin": "^12.1.1",
     "fluent-ffmpeg": "^2.1.3",
     "google-auth-library": "^9.10.0",
     "googleapis": "^137.1.0",
@@ -16,7 +18,9 @@
     "node-fetch": "^3.3.2",
     "nodemon": "^3.1.3",
     "request": "^2.88.2",
-    "telegraf": "^4.16.3"
+    "telegraf": "^4.16.3",
+    "uuid": "^10.0.0",
+    "youtube-dl-exec": "^3.0.2"
   },
   "scripts": {
     "test": "nodemon index.js",

@@ -1,14 +1,13 @@
 import axios from "axios";
 import { PassThrough } from "stream";
 import fetch from "node-fetch";
-import { oauth2Client } from "./googleAuth.js";
+import { oauth2Client } from "../googleAuth.js";
 import { google } from "googleapis";
-import db from "./connection.js";
 import saveTokens from "./SaveToken.js";
 
-export default async function uploadVideo(ctx, file_id, link) {
+export default async function uploadVideo(ctx, file_id) {
   console.log("Upload initiated");
-  ctx.reply("Upload started");
+  ctx.reply("Upload started for youtube");
 
   const userId = ctx.from.id.toString();
   console.log(`User ID: ${userId}`);
@@ -47,10 +46,6 @@ export default async function uploadVideo(ctx, file_id, link) {
     oauth2Client.setCredentials(userTokens);
 
     console.log("Getting file link");
-
-    let fileLink;
-
-    if (file_id) {
       // Fetch file link using Axios if file_id is provided
       const fileLinkResponse = await axios.get(
         `https://api.telegram.org/bot${process.env.TOKEN}/getFile?file_id=${file_id}`
@@ -61,28 +56,14 @@ export default async function uploadVideo(ctx, file_id, link) {
       }
 
       fileLink = fileLinkResponse.data.result.file_path;
-    } else if (link) {
-      // If link is provided, use it directly
-      fileLink = link;
-    } else {
-      throw new Error("No file ID or link provided");
-    }
-
     console.log(`File link: ${fileLink}`);
 
     console.log("Downloading video file");
-var fileResponse;
     // Download video file as a stream
-    if(file_id){
       var fileResponse = await axios.get(
         `https://api.telegram.org/file/bot${process.env.TOKEN}/${fileLink}`,
         { responseType: "stream" }
       );
-    }else{
-      var fileResponse = await axios.get(link,{
-        responseType: "stream"
-      })
-    }
 
     const passThrough = new PassThrough();
     fileResponse.data.pipe(passThrough);

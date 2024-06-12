@@ -2,7 +2,6 @@ import express from "express";
 import bot from "./bot.js"; // Ensure this exports a configured Telegraf instance
 import "dotenv/config";
 import router from "./routes/routes.js";
-import bodyParser from 'body-parser';
 
 const app = express();
 const port = process.env.PORT || 3000;
@@ -29,7 +28,6 @@ async function setup() {
     console.error("Error setting up webhook:", error);
   }
 }
-
 // Start the Express server
 app.listen(port, async () => {
 await setup();
