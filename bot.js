@@ -1,7 +1,7 @@
 import { Telegraf } from "telegraf";
 import "dotenv/config";
 import uploadVideo from "./handlers/upload.js";
-import Livestream from "./handlers/Livestream.js";
+import { startLivestream, stopLivestream } from "./handlers/Livestream.js";
 import Firebase from "./handlers/Firebase.js";
 import downloadAndUploadYouTubeVideo from "./handlers/Ytdl.js";
 const bot = new Telegraf(process.env.TOKEN);
@@ -20,7 +20,9 @@ bot.on("message", async (ctx) => {
   }else if(text==="hi"){
 ctx.reply("hi too")
   }else if(text === "stream"){
-Livestream(ctx)
+startLivestream(ctx)
+  }else if(text === "stop"){
+    stopLivestream(ctx)
   }else if(text==="auth"){
     const id = ctx.from.id;
     ctx.reply(`${process.env.BASE_URL}/auth?id=${id}`);
