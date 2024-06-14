@@ -16,10 +16,10 @@ export async function AddDb(url,name,ctx){
         Name: name,
         Url:url
     }
-const collection = await db.collection("videos")
+const collection = await db.collection("video2")
 const res = await collection.insertOne(newRecord)
 console.log(res)
-ctx.reply(`video added to db /n Name:${name}`)
+ctx.reply(`video added to db,     Name:${name}`)
 }
 export default async function Firebase(ctx, file_id) {
   try {

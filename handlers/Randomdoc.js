@@ -2,7 +2,7 @@ import db from "../database/connection.js";
 
 export default async function getRandomDocument() {
   try {
-    const collection = db.collection("videos");
+    const collection = db.collection("video2");
 
     // Use the $sample aggregation stage to get a random document
     const randomDocArray = await collection.aggregate([{ $sample: { size: 1 } }]).toArray();
