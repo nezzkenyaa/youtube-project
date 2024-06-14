@@ -16,7 +16,7 @@ export async function AddDb(url,name,ctx){
         Name: name,
         Url:url
     }
-const collection = await db.collection("video2")
+const collection = await db.collection("streamv")
 const res = await collection.insertOne(newRecord)
 console.log(res)
 ctx.reply(`video added to db,     Name:${name}`)
