@@ -30,7 +30,7 @@ export default async function downloadAndUploadYouTubeVideo(ctx, url) {
 
     return new Promise((resolve, reject) => {
       const videoStream = youtubedl.exec(url, {
-        format: "best[height<=1080][ext=mp4]+bestaudio/best[height<=1080]/best",
+        format: "b", // Use "-f b" to get the best pre-merged format
         output: "-"
       }, { stdio: ['ignore', 'pipe', 'pipe'] });
 
