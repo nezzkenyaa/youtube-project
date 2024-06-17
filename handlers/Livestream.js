@@ -2,7 +2,8 @@ import ffmpeg from "fluent-ffmpeg";
 import ffmpegPath from "ffmpeg-static";
 import ffprobe from "ffprobe-static";
 import getRandomDocument from "./Randomdoc.js";
-import axios from 'axios';
+import path from "path";
+import { fileURLToPath } from 'url';
 
 // Set the path to the precompiled ffmpeg binary
 ffmpeg.setFfmpegPath(ffmpegPath);
@@ -14,6 +15,11 @@ let isStreaming = false;
 
 // Replace this with your YouTube stream URL
 const youtubeStreamUrl = process.env.S_URL;
+
+// Path to the video file in the root path
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
+const videoPath = path.resolve(__dirname, "s.mp4");
 
 // Function to get the duration of the video
 async function getVideoDuration(url) {
@@ -27,18 +33,6 @@ async function getVideoDuration(url) {
       }
     });
   });
-}
-
-// Function to fetch a random video from Pixabay
-async function getPixabayVideo() {
-  const apiKey = process.env.PIXABAY_API_KEY; // Add your Pixabay API key to your environment variables
-  const response = await axios.get(`https://pixabay.com/api/videos/?key=${process.env.PK}&per_page=10`);
-  const videos = response.data.hits;
-  if (videos.length === 0) {
-    throw new Error("No videos found on Pixabay.");
-  }
-  const randomIndex = Math.floor(Math.random() * videos.length);
-  return videos[randomIndex].videos.medium.url; // Choose the video quality you need
 }
 
 // Function to start live streaming
@@ -55,35 +49,37 @@ async function startLivestream(ctx) {
       throw new Error("No valid document URL found in the collection.");
     }
 
-    const audioUrl = randomDoc.Url;
-    const duration = await getVideoDuration(audioUrl);
-    if (!duration) {
-      throw new Error("Failed to get video duration.");
+    const audioDuration = await getVideoDuration(randomDoc.Url);
+    const videoDuration = await getVideoDuration(videoPath);
+
+    if (!audioDuration || !videoDuration) {
+      throw new Error("Failed to get video or audio duration.");
     }
 
     isStreaming = true;
 
-    // Set up a function to get the next Pixabay video URL
-    let currentVideoUrl = await getPixabayVideo();
-
     // Set up ffmpeg command with the desired bitrates and options
-    ffmpegProcess = ffmpeg(currentVideoUrl)
+    ffmpegProcess = ffmpeg()
+      .input(videoPath)
       .inputOptions([
+        "-stream_loop -1", // Loop the video infinitely
         "-re" // Read input at native frame rate for live streaming
       ])
-      .input(audioUrl)
+      .input(randomDoc.Url)
       .inputOptions([
         "-re" // Read input at native frame rate for live streaming
       ])
       .outputOptions([
+        "-map 0:v:0", // Use the video stream from the first input
+        "-map 1:a:0", // Use the audio stream from the second input
         "-c:v libx264",  // Video codec
-        "-b:v 750k", 
+        "-b:v 2500k", 
         "-c:a aac",      // Audio codec
         "-b:a 128k",     // Audio bitrate
         "-strict -2",    // Needed for some ffmpeg builds
         "-f flv",        // Output format
-        "-shortest",     // Stop when the shortest input stream ends
-        "-flush_packets 0" // Ensure no packet is dropped during streaming
+        "-flush_packets 0", // Ensure no packet is dropped during streaming
+        "-shortest" // Ensure the output ends when the shortest input ends
       ])
       .on("start", function (commandLine) {
         ctx.reply("Stream starting...");
