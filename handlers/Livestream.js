@@ -19,7 +19,7 @@ const youtubeStreamUrl = process.env.S_URL;
 // Path to the video file in the root path
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
-const videoPath = path.resolve(__dirname, "s.mp4");
+const videoPath = path.resolve(__dirname, "t.mp4");
 
 // Function to get the duration of the video
 async function getVideoDuration(url) {
@@ -73,7 +73,7 @@ async function startLivestream(ctx) {
         "-map 0:v:0", // Use the video stream from the first input
         "-map 1:a:0", // Use the audio stream from the second input
         "-c:v libx264",  // Video codec
-        "-b:v 750k", 
+        "-b:v 6800k", 
         "-c:a aac",      // Audio codec
         "-b:a 128k",     // Audio bitrate
         "-strict -2",    // Needed for some ffmpeg builds
@@ -113,8 +113,6 @@ async function startLivestream(ctx) {
         // Reset streaming status immediately after completion
         isStreaming = false;
 
-        // Wait for a short delay before starting a new stream
-        await new Promise(resolve => setTimeout(resolve, 5000));
         startLivestream(ctx);
       })
       .output(youtubeStreamUrl)
@@ -124,8 +122,6 @@ async function startLivestream(ctx) {
     ctx.reply("An error occurred while setting up the stream.");
     console.error("Error in startLivestream function: ", error.message);
     isStreaming = false; // Reset streaming status on error
-    // Optionally add a delay before retrying
-    await new Promise(resolve => setTimeout(resolve, 5000));
     startLivestream(ctx); // Retry streaming after delay
   }
 }
