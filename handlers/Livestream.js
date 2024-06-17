@@ -73,7 +73,7 @@ async function startLivestream(ctx) {
         "-map 0:v:0", // Use the video stream from the first input
         "-map 1:a:0", // Use the audio stream from the second input
         "-c:v libx264",  // Video codec
-        "-b:v 2500k", 
+        "-b:v 750k", 
         "-c:a aac",      // Audio codec
         "-b:a 128k",     // Audio bitrate
         "-strict -2",    // Needed for some ffmpeg builds
@@ -81,6 +81,17 @@ async function startLivestream(ctx) {
         "-flush_packets 0", // Ensure no packet is dropped during streaming
         "-shortest" // Ensure the output ends when the shortest input ends
       ])
+      .videoFilter({
+        filter: "drawtext",
+        options: {
+          fontfile: "../Righteous-Regular.ttf", // Path to a font file
+          text: randomDoc.Name,
+          fontsize: 24,
+          fontcolor: "white",
+          x: "(w-text_w)/2",
+          y: "h-40"
+        }
+      })
       .on("start", function (commandLine) {
         ctx.reply("Stream starting...");
         ctx.reply(`Streaming: ${randomDoc.Name}`);
@@ -102,6 +113,8 @@ async function startLivestream(ctx) {
         // Reset streaming status immediately after completion
         isStreaming = false;
 
+        // Wait for a short delay before starting a new stream
+        await new Promise(resolve => setTimeout(resolve, 5000));
         startLivestream(ctx);
       })
       .output(youtubeStreamUrl)
@@ -111,6 +124,8 @@ async function startLivestream(ctx) {
     ctx.reply("An error occurred while setting up the stream.");
     console.error("Error in startLivestream function: ", error.message);
     isStreaming = false; // Reset streaming status on error
+    // Optionally add a delay before retrying
+    await new Promise(resolve => setTimeout(resolve, 5000));
     startLivestream(ctx); // Retry streaming after delay
   }
 }
