@@ -2,6 +2,7 @@ import ffmpeg from "fluent-ffmpeg";
 import ffmpegPath from "ffmpeg-static";
 import ffprobe from "ffprobe-static";
 import getRandomDocument from "./Randomdoc.js";
+import axios from 'axios';
 
 // Set the path to the precompiled ffmpeg binary
 ffmpeg.setFfmpegPath(ffmpegPath);
@@ -28,6 +29,18 @@ async function getVideoDuration(url) {
   });
 }
 
+// Function to fetch a random video from Pixabay
+async function getPixabayVideo() {
+  const apiKey = process.env.PIXABAY_API_KEY; // Add your Pixabay API key to your environment variables
+  const response = await axios.get(`https://pixabay.com/api/videos/?key=${process.env.PK}&per_page=10`);
+  const videos = response.data.hits;
+  if (videos.length === 0) {
+    throw new Error("No videos found on Pixabay.");
+  }
+  const randomIndex = Math.floor(Math.random() * videos.length);
+  return videos[randomIndex].videos.medium.url; // Choose the video quality you need
+}
+
 // Function to start live streaming
 async function startLivestream(ctx) {
   if (isStreaming) {
@@ -42,15 +55,23 @@ async function startLivestream(ctx) {
       throw new Error("No valid document URL found in the collection.");
     }
 
-    const duration = await getVideoDuration(randomDoc.Url);
+    const audioUrl = randomDoc.Url;
+    const duration = await getVideoDuration(audioUrl);
     if (!duration) {
       throw new Error("Failed to get video duration.");
     }
 
     isStreaming = true;
 
+    // Set up a function to get the next Pixabay video URL
+    let currentVideoUrl = await getPixabayVideo();
+
     // Set up ffmpeg command with the desired bitrates and options
-    ffmpegProcess = ffmpeg(randomDoc.Url)
+    ffmpegProcess = ffmpeg(currentVideoUrl)
+      .inputOptions([
+        "-re" // Read input at native frame rate for live streaming
+      ])
+      .input(audioUrl)
       .inputOptions([
         "-re" // Read input at native frame rate for live streaming
       ])
@@ -61,6 +82,7 @@ async function startLivestream(ctx) {
         "-b:a 128k",     // Audio bitrate
         "-strict -2",    // Needed for some ffmpeg builds
         "-f flv",        // Output format
+        "-shortest",     // Stop when the shortest input stream ends
         "-flush_packets 0" // Ensure no packet is dropped during streaming
       ])
       .on("start", function (commandLine) {
@@ -84,8 +106,6 @@ async function startLivestream(ctx) {
         // Reset streaming status immediately after completion
         isStreaming = false;
 
-        // Wait for a short delay before starting a new stream
-        await new Promise(resolve => setTimeout(resolve, 5000));
         startLivestream(ctx);
       })
       .output(youtubeStreamUrl)
@@ -95,8 +115,6 @@ async function startLivestream(ctx) {
     ctx.reply("An error occurred while setting up the stream.");
     console.error("Error in startLivestream function: ", error.message);
     isStreaming = false; // Reset streaming status on error
-    // Optionally add a delay before retrying
-    await new Promise(resolve => setTimeout(resolve, 5000));
     startLivestream(ctx); // Retry streaming after delay
   }
 }
