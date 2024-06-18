@@ -45,11 +45,11 @@ async function startLivestream(ctx) {
   try {
     // Fetch the random document URL
     const randomDoc = await getRandomDocument();
-    if (!randomDoc || !randomDoc.Url) {
+    if (!randomDoc || !randomDoc.url) {
       throw new Error("No valid document URL found in the collection.");
     }
 
-    const audioDuration = await getVideoDuration(randomDoc.Url);
+    const audioDuration = await getVideoDuration(randomDoc.url);
     const videoDuration = await getVideoDuration(videoPath);
 
     if (!audioDuration || !videoDuration) {
@@ -65,7 +65,7 @@ async function startLivestream(ctx) {
         "-stream_loop -1", // Loop the video infinitely
         "-re" // Read input at native frame rate for live streaming
       ])
-      .input(randomDoc.Url)
+      .input(randomDoc.url)
       .inputOptions([
         "-re" // Read input at native frame rate for live streaming
       ])
@@ -84,17 +84,18 @@ async function startLivestream(ctx) {
       .videoFilter({
         filter: "drawtext",
         options: {
-          fontfile: "../Righteous-Regular.ttf", // Path to a font file
-          text: randomDoc.Name,
-          fontsize: 24,
+          fontfile: path.resolve(__dirname, "../Righteous-Regular.ttf"), // Path to your font file
+          text: `${randomDoc.artist}\n${randomDoc.title}`,
+          fontsize: 46, // Font size
           fontcolor: "white",
-          x: "(w-text_w)/2",
-          y: "h-40"
+          x: "(w-text_w)/2", // Center horizontally based on the width of each line of text
+          y: "h-th-20", // Position vertically 40 pixels from the bottom (adjust as needed)
+          line_spacing: 12 // Line spacing
         }
       })
       .on("start", function (commandLine) {
         ctx.reply("Stream starting...");
-        ctx.reply(`Streaming: ${randomDoc.Name}`);
+        ctx.reply(`Streaming: ${randomDoc.artist} - ${randomDoc.title}`);
         console.log("Spawned FFmpeg with command: " + commandLine);
       })
       .on("error", function (err, stdout, stderr) {
