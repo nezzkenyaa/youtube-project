@@ -1,9 +1,10 @@
 import ffmpeg from "fluent-ffmpeg";
 import ffmpegPath from "ffmpeg-static";
 import ffprobe from "ffprobe-static";
-import getRandomDocument from "./Randomdoc.js";
+import getRandomDocument from "./Randomdoc.js"; // Adjust path as per your project structure
 import path from "path";
 import { fileURLToPath } from 'url';
+import fs from 'fs';
 
 // Set the path to the precompiled ffmpeg binary
 ffmpeg.setFfmpegPath(ffmpegPath);
@@ -19,9 +20,9 @@ const youtubeStreamUrl = process.env.S_URL;
 // Path to the video file in the root path
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
-const videoPath = path.resolve(__dirname, "t.mp4");
+const videoPath = path.resolve(__dirname, "output.mp4"); // Output video file path
 
-// Function to get the duration of the video
+// Function to get the duration of a video
 async function getVideoDuration(url) {
   return new Promise((resolve, reject) => {
     ffmpeg.ffprobe(url, (err, metadata) => {
@@ -35,6 +36,42 @@ async function getVideoDuration(url) {
   });
 }
 
+// Function to concatenate multiple audio files into a single video
+async function createVideoFromSongs(songUrls) {
+  return new Promise((resolve, reject) => {
+    let ffmpegCommand = ffmpeg();
+
+    // Add each song as an input
+    songUrls.forEach((songUrl) => {
+      ffmpegCommand.input(songUrl).inputOptions(["-re"]); // Read input at native frame rate for live streaming
+    });
+
+    ffmpegCommand
+      .inputOptions([
+        "-f concat", // Format for concatenating inputs
+        "-safe 0"    // Allow unsafe filenames
+      ])
+      .outputOptions([
+        "-c:v libx264",  // Video codec
+        "-b:v 6800k",    // Video bitrate
+        "-c:a aac",      // Audio codec
+        "-b:a 128k",     // Audio bitrate
+        "-strict -2",    // Needed for some ffmpeg builds
+        "-f mp4"         // Output format
+      ])
+      .output(videoPath)
+      .on("end", function () {
+        console.log("Video concatenation finished.");
+        resolve(videoPath);
+      })
+      .on("error", function (err, stdout, stderr) {
+        console.error("Error concatenating videos:", err.message);
+        reject(err);
+      })
+      .run();
+  });
+}
+
 // Function to start live streaming
 async function startLivestream(ctx) {
   if (isStreaming) {
@@ -43,49 +80,43 @@ async function startLivestream(ctx) {
   }
 
   try {
-    // Fetch the random document URL
-    const randomDoc = await getRandomDocument();
-    if (!randomDoc || !randomDoc.url) {
-      throw new Error("No valid document URL found in the collection.");
-    }
+    // Fetch 10 random documents (songs)
+    const randomDocs = await Promise.all(Array.from({ length: 10 }, () => getRandomDocument()));
+    const songUrls = randomDocs.map(doc => doc.url);
 
-    const audioDuration = await getVideoDuration(randomDoc.url);
-    const videoDuration = await getVideoDuration(videoPath);
+    // Create a video from the fetched songs
+    const videoFilePath = await createVideoFromSongs(songUrls);
 
-    if (!audioDuration || !videoDuration) {
-      throw new Error("Failed to get video or audio duration.");
+    // Get the duration of the created video
+    const videoDuration = await getVideoDuration(videoFilePath);
+
+    if (!videoDuration) {
+      throw new Error("Failed to get video duration.");
     }
 
     isStreaming = true;
 
-    // Set up ffmpeg command with the desired bitrates and options
+    // Set up ffmpeg command to stream the created video
     ffmpegProcess = ffmpeg()
-      .input(videoPath)
-      .inputOptions([
-        "-stream_loop -1", // Loop the video infinitely
-        "-re" // Read input at native frame rate for live streaming
-      ])
-      .input(randomDoc.url)
+      .input(videoFilePath)
       .inputOptions([
         "-re" // Read input at native frame rate for live streaming
       ])
       .outputOptions([
-        "-map 0:v:0", // Use the video stream from the first input
-        "-map 1:a:0", // Use the audio stream from the second input
         "-c:v libx264",  // Video codec
-        "-b:v 6800k", 
+        "-b:v 6800k",    // Video bitrate
         "-c:a aac",      // Audio codec
         "-b:a 128k",     // Audio bitrate
         "-strict -2",    // Needed for some ffmpeg builds
         "-f flv",        // Output format
         "-flush_packets 0", // Ensure no packet is dropped during streaming
-        "-shortest" // Ensure the output ends when the shortest input ends
+        "-shortest"      // Ensure the output ends when the shortest input ends
       ])
       .videoFilter({
         filter: "drawtext",
         options: {
           fontfile: path.resolve(__dirname, "../Righteous-Regular.ttf"), // Path to your font file
-          text: `${randomDoc.artist}\n${randomDoc.title}`,
+          text: "Custom text overlay", // Customize as needed
           fontsize: 46, // Font size
           fontcolor: "white",
           x: "(w-text_w)/2", // Center horizontally based on the width of each line of text
@@ -95,7 +126,6 @@ async function startLivestream(ctx) {
       })
       .on("start", function (commandLine) {
         ctx.reply("Stream starting...");
-        ctx.reply(`Streaming: ${randomDoc.artist} - ${randomDoc.title}`);
         console.log("Spawned FFmpeg with command: " + commandLine);
       })
       .on("error", function (err, stdout, stderr) {
@@ -104,17 +134,10 @@ async function startLivestream(ctx) {
         console.error("ffmpeg stderr: " + stderr);
         isStreaming = false; // Reset streaming status on error
       })
-      .on("end", async function () {
-        ctx.reply("Streaming finished! Fetching new URL...");
-        console.log("Streaming finished!");
-
-        // Ensure the ffmpeg process is terminated
-        ffmpegProcess = null;
-
-        // Reset streaming status immediately after completion
-        isStreaming = false;
-
-        startLivestream(ctx);
+      .on("end", function () {
+        ctx.reply("Streaming finished.");
+        console.log("Streaming finished.");
+        isStreaming = false; // Reset streaming status on completion
       })
       .output(youtubeStreamUrl)
       .run();
@@ -123,7 +146,6 @@ async function startLivestream(ctx) {
     ctx.reply("An error occurred while setting up the stream.");
     console.error("Error in startLivestream function: ", error.message);
     isStreaming = false; // Reset streaming status on error
-    startLivestream(ctx); // Retry streaming after delay
   }
 }
 
