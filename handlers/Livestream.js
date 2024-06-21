@@ -15,6 +15,7 @@ ffmpeg.setFfprobePath(ffprobe.path);
 let ffmpegProcess = null;
 let isStreaming = false;
 let audioFiles = []; // Array to store paths of downloaded audio files
+let currentTrackIndex = 0; // To keep track of the current audio
 
 // Replace this with your YouTube stream URL
 const youtubeStreamUrl = process.env.S_URL;
@@ -82,49 +83,54 @@ async function streamAudio(ctx) {
     fs.writeFileSync(audioListPath, audioListContent);
 
     // Initialize FFmpeg command with the video loop and concatenated audio
-    ffmpegProcess = ffmpeg()
-      .input(videoPath)
-      .inputOptions([
-        "-stream_loop -1", // Loop the video infinitely
-        "-re" // Read input at native frame rate for live streaming
-      ])
-      .input(audioListPath)
-      .inputOptions([
-        "-f concat",
-        "-safe 0", // Allow unsafe file paths
-        "-re" // Read input at native frame rate for live streaming
-      ])
-      .outputOptions([
-        "-map 0:v:0", // Use the video stream from the first input
-        "-map 1:a:0", // Use the audio stream from the concatenated input
-        "-c:v libx264",  // Video codec
-        "-b:v 6800k",
-        "-c:a aac",      // Audio codec
-        "-b:a 128k",     // Audio bitrate
-        "-strict -2",    // Needed for some ffmpeg builds
-        "-f flv",        // Output format
-        "-flush_packets 0", // Ensure no packet is dropped during streaming
-        "-reconnect 1", // Reconnect if connection is lost
-        "-reconnect_streamed 1", // Reconnect when the current stream is finished
-        "-reconnect_delay_max 5" // Maximum delay between reconnect attempts (in seconds)
-      ])
-      .on("start", function (commandLine) {
-        ctx.reply("Stream starting...");
-        console.log("Spawned FFmpeg with command: " + commandLine);
-      })
-      .on("error", function (err, stdout, stderr) {
-        ctx.reply("An error occurred during streaming.");
-        console.error("Error: " + err.message);
-        console.error("ffmpeg stderr: " + stderr);
-        // Handle error gracefully
-        isStreaming = false; // Reset streaming status on error
-      })
-      .on("end", async function () {
-        console.log("Stream ended. Restarting...");
-        await streamAudio(ctx); // Restart streaming
-      })
-      .output(youtubeStreamUrl)
-      .run();
+    function startFfmpegCommand() {
+      ffmpegProcess = ffmpeg()
+        .input(videoPath)
+        .inputOptions([
+          "-stream_loop -1", // Loop the video infinitely
+          "-re" // Read input at native frame rate for live streaming
+        ])
+        .input(audioListPath)
+        .inputOptions([
+          "-f concat",
+          "-safe 0", // Allow unsafe file paths
+          "-re" // Read input at native frame rate for live streaming
+        ])
+        .outputOptions([
+          "-map 0:v:0", // Use the video stream from the first input
+          "-map 1:a:0", // Use the audio stream from the concatenated input
+          "-c:v libx264",  // Video codec
+          "-b:v 6800k",
+          "-c:a aac",      // Audio codec
+          "-b:a 128k",     // Audio bitrate
+          "-strict -2",    // Needed for some ffmpeg builds
+          "-f flv",        // Output format
+          "-flush_packets 0", // Ensure no packet is dropped during streaming
+          "-reconnect 1", // Reconnect if connection is lost
+          "-reconnect_streamed 1", // Reconnect when the current stream is finished
+          "-reconnect_delay_max 5" // Maximum delay between reconnect attempts (in seconds)
+        ])
+        .on("start", function (commandLine) {
+          ctx.reply("Stream starting...");
+          console.log("Spawned FFmpeg with command: " + commandLine);
+        })
+        .on("error", function (err, stdout, stderr) {
+          ctx.reply("An error occurred during streaming.");
+          console.error("Error: " + err.message);
+          console.error("ffmpeg stderr: " + stderr);
+          // Handle error gracefully
+          isStreaming = false; // Reset streaming status on error
+        })
+        .on("end", async function () {
+          console.log("Audio finished! Restarting with new audio...");
+          currentTrackIndex = (currentTrackIndex + 1) % audioDocs.length;
+          await streamAudio(ctx); // Restart streaming with the next track
+        })
+        .output(youtubeStreamUrl)
+        .run();
+    }
+
+    startFfmpegCommand();
 
   } catch (error) {
     ctx.reply("An error occurred while streaming audio.");
