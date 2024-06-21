@@ -16,7 +16,7 @@ export default async function getRandomDocument() {
     const randomDocArray = shuffleArray(allDocs);
 
     // Return the random order of documents
-    return randomDocArray[0];
+    return randomDocArray;
   } catch (error) {
     console.error("Error retrieving random document:", error);
     throw error;
