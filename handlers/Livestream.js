@@ -120,6 +120,7 @@ async function streamAudio(ctx) {
           console.error("ffmpeg stderr: " + stderr);
           // Handle error gracefully
           isStreaming = false; // Reset streaming status on error
+          cleanUpAudioFiles(); // Delete downloaded audio files
         })
         .on("end", async function () {
           console.log("Audio finished! Restarting with new audio...");
@@ -136,6 +137,7 @@ async function streamAudio(ctx) {
     ctx.reply("An error occurred while streaming audio.");
     console.error("Error in streamAudio function: ", error.message);
     isStreaming = false; // Reset streaming status on error
+    cleanUpAudioFiles(); // Delete downloaded audio files
   }
 }
 
