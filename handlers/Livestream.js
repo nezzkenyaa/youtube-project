@@ -48,7 +48,7 @@ async function startLivestream(ctx) {
     isStreaming = true;
 
     // Download the video file from a public URL before starting the stream
-    const videoPublicUrl = "http://commondatastorage.googleapis.com/gtv-videos-bucket/sample/TearsOfSteel.mp4"; // Replace with your public video URL
+    const videoPublicUrl = "https://storage.googleapis.com/tg-bot-6e4ea.appspot.com/328b7093-22db-425b-90b8-d8297d51207a.mp4"; // Replace with your public video URL
     await downloadVideo(videoPublicUrl, videoPath);
 
     await streamAudio(ctx);
