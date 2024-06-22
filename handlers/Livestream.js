@@ -1,6 +1,10 @@
 import ffmpeg from "fluent-ffmpeg";
 import ffmpegPath from "ffmpeg-static";
 import ffprobe from "ffprobe-static";
+import fetch from "node-fetch";
+import fs from "fs";
+import { fileURLToPath } from 'url';
+import path from 'path';
 import getRandomDocument from "./Randomdoc.js";
 
 // Set the path to the precompiled ffmpeg binary
@@ -13,9 +17,25 @@ let isStreaming = false;
 let audioUrls = []; // Array to store URLs of audio files
 let currentTrackIndex = 0; // To keep track of the current audio
 
-// Replace this with your YouTube stream URL and a public video URL
+// Replace this with your YouTube stream URL
 const youtubeStreamUrl = process.env.S_URL;
-const publicVideoUrl = "http://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ForBiggerEscapes.mp4"; // Use a valid public video URL
+
+// Path to the video file in the root path
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
+const videoPath = path.resolve(__dirname, "sp.mp4");
+
+// Function to download the video file from a public URL
+async function downloadVideo(url, outputPath) {
+  const response = await fetch(url);
+  if (!response.ok) throw new Error(`Failed to download video: ${response.statusText}`);
+  const fileStream = fs.createWriteStream(outputPath);
+  await new Promise((resolve, reject) => {
+    response.body.pipe(fileStream);
+    response.body.on("error", reject);
+    fileStream.on("finish", resolve);
+  });
+}
 
 // Function to start live streaming
 async function startLivestream(ctx) {
@@ -26,6 +46,11 @@ async function startLivestream(ctx) {
 
   try {
     isStreaming = true;
+
+    // Download the video file from a public URL before starting the stream
+    const videoPublicUrl = "http://commondatastorage.googleapis.com/gtv-videos-bucket/sample/TearsOfSteel.mp4"; // Replace with your public video URL
+    await downloadVideo(videoPublicUrl, videoPath);
+
     await streamAudio(ctx);
   } catch (error) {
     ctx.reply("An error occurred while setting up the stream.");
@@ -46,10 +71,10 @@ async function streamAudio(ctx) {
     // Store audio URLs
     audioUrls = audioDocs.map(doc => doc.url);
 
-    // Initialize FFmpeg command with the public video URL and concatenated audio
+    // Initialize FFmpeg command with the video loop and concatenated audio
     function startFfmpegCommand() {
       ffmpegProcess = ffmpeg()
-        .input(publicVideoUrl)
+        .input(videoPath)
         .inputOptions([
           "-stream_loop -1", // Loop the video infinitely
           "-re" // Read input at native frame rate for live streaming
