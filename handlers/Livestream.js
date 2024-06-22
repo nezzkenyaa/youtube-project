@@ -2,8 +2,6 @@ import ffmpeg from "fluent-ffmpeg";
 import ffmpegPath from "ffmpeg-static";
 import ffprobe from "ffprobe-static";
 import getRandomDocument from "./Randomdoc.js";
-import { fileURLToPath } from 'url';
-import path from 'path';
 
 // Set the path to the precompiled ffmpeg binary
 ffmpeg.setFfmpegPath(ffmpegPath);
@@ -15,13 +13,9 @@ let isStreaming = false;
 let audioUrls = []; // Array to store URLs of audio files
 let currentTrackIndex = 0; // To keep track of the current audio
 
-// Replace this with your YouTube stream URL
+// Replace this with your YouTube stream URL and a public video URL
 const youtubeStreamUrl = process.env.S_URL;
-
-// Path to the video file in the root path
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = path.dirname(__filename);
-const videoPath = path.resolve(__dirname, "t.mp4");
+const publicVideoUrl = "http://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ForBiggerEscapes.mp4"; // Use a valid public video URL
 
 // Function to start live streaming
 async function startLivestream(ctx) {
@@ -52,10 +46,10 @@ async function streamAudio(ctx) {
     // Store audio URLs
     audioUrls = audioDocs.map(doc => doc.url);
 
-    // Initialize FFmpeg command with the video loop and concatenated audio
+    // Initialize FFmpeg command with the public video URL and concatenated audio
     function startFfmpegCommand() {
       ffmpegProcess = ffmpeg()
-        .input(videoPath)
+        .input(publicVideoUrl)
         .inputOptions([
           "-stream_loop -1", // Loop the video infinitely
           "-re" // Read input at native frame rate for live streaming
