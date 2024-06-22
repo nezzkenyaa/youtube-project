@@ -27,6 +27,7 @@ const videoPath = path.resolve(__dirname, "sp.mp4");
 
 // Function to download the video file from a public URL
 async function downloadVideo(url, outputPath) {
+  console.log(`Downloading video from ${url} to ${outputPath}`);
   const response = await fetch(url);
   if (!response.ok) throw new Error(`Failed to download video: ${response.statusText}`);
   const fileStream = fs.createWriteStream(outputPath);
@@ -35,6 +36,7 @@ async function downloadVideo(url, outputPath) {
     response.body.on("error", reject);
     fileStream.on("finish", resolve);
   });
+  console.log("Video downloaded successfully");
 }
 
 // Function to start live streaming
