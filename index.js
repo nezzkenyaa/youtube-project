@@ -9,6 +9,9 @@ const webhook = process.env.BASE_URL;
 // Middleware
 app.use(express.json())
 
+app.get("/",async (req,res)=>{
+  res.send("hello world")
+});
 // Handle incoming updates from Telegram
 app.post("/telegraf/:id", (req, res) => {
   bot.handleUpdate(req.body);
