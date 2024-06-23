@@ -98,9 +98,11 @@ async function streamAudio(ctx) {
         .outputOptions([
           "-map 0:v:0", // Use the video stream from the first input
           "-map 1:a:0", // Use the audio stream from the concatenated input
-          "-c:v copy",  // Copy video codec to avoid re-encoding
+          "-c:v libx264",  // Use libx264 codec for video encoding
+          "-b:v 500k", // Significantly reduced video bitrate
+          "-s 640x360", // Reduced resolution
           "-c:a aac",      // Audio codec
-          "-b:a 64k",     // Reduced audio bitrate
+          "-b:a 32k",     // Reduced audio bitrate
           "-f flv",        // Output format
           "-flush_packets 0", // Ensure no packet is dropped during streaming
           "-reconnect 1", // Reconnect if connection is lost
