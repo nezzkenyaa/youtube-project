@@ -22,7 +22,7 @@ const youtubeStreamUrl = process.env.S_URL;
 // Path to the short video file in the root path
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
-const shortVideoPath = path.resolve(__dirname, "document_6034864354405388885.mp4");
+const shortVideoPath = path.resolve(__dirname, "short_video.mp4");
 
 // Function to download an audio file locally
 async function downloadAudio(url, filepath) {
@@ -93,6 +93,7 @@ async function streamAudio(ctx) {
         .inputOptions([
           "-f concat",
           "-safe 0", // Allow unsafe file paths
+          "-stream_loop -1", // Loop the audio infinitely
           "-re" // Read input at native frame rate for live streaming
         ])
         .outputOptions([
@@ -119,9 +120,10 @@ async function streamAudio(ctx) {
           isStreaming = false; // Reset streaming status on error
           cleanUpAudioFiles(); // Delete downloaded audio files
         })
-        .on("end", async function () {
-          console.log("Audio finished! Restarting with new audio...");
-          await streamAudio(ctx); // Restart streaming with the next track
+        .on("end", function () {
+          console.log("Stream ended.");
+          isStreaming = false;
+          cleanUpAudioFiles(); // Delete downloaded audio files
         })
         .output(youtubeStreamUrl)
         .run();
