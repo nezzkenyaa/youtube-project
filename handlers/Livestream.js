@@ -1,11 +1,11 @@
 import ffmpeg from "fluent-ffmpeg";
 import ffmpegPath from "ffmpeg-static";
 import ffprobe from "ffprobe-static";
-import fetch from "node-fetch";
-import fs from "fs";
-import { fileURLToPath } from 'url';
-import path from 'path';
 import getRandomDocument from "./Randomdoc.js";
+import fs from "fs";
+import path from "path";
+import { fileURLToPath } from 'url';
+import axios from 'axios';
 
 // Set the path to the precompiled ffmpeg binary
 ffmpeg.setFfmpegPath(ffmpegPath);
@@ -14,8 +14,7 @@ ffmpeg.setFfprobePath(ffprobe.path);
 // Store the reference to the ffmpeg process globally
 let ffmpegProcess = null;
 let isStreaming = false;
-let audioUrls = []; // Array to store URLs of audio files
-let currentTrackIndex = 0; // To keep track of the current audio
+let audioFiles = []; // Array to store paths of downloaded audio files
 
 // Replace this with your YouTube stream URL
 const youtubeStreamUrl = process.env.S_URL;
@@ -25,18 +24,21 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 const videoPath = path.resolve(__dirname, "sp.mp4");
 
-// Function to download the video file from a public URL
-async function downloadVideo(url, outputPath) {
-  console.log(`Downloading video from ${url} to ${outputPath}`);
-  const response = await fetch(url);
-  if (!response.ok) throw new Error(`Failed to download video: ${response.statusText}`);
-  const fileStream = fs.createWriteStream(outputPath);
-  await new Promise((resolve, reject) => {
-    response.body.pipe(fileStream);
-    response.body.on("error", reject);
-    fileStream.on("finish", resolve);
+// Function to download an audio file locally
+async function downloadAudio(url, filepath) {
+  const writer = fs.createWriteStream(filepath);
+  const response = await axios({
+    url,
+    method: 'GET',
+    responseType: 'stream',
   });
-  console.log("Video downloaded successfully");
+
+  response.data.pipe(writer);
+
+  return new Promise((resolve, reject) => {
+    writer.on('finish', resolve);
+    writer.on('error', reject);
+  });
 }
 
 // Function to start live streaming
@@ -48,11 +50,6 @@ async function startLivestream(ctx) {
 
   try {
     isStreaming = true;
-
-    // Download the video file from a public URL before starting the stream
-    const videoPublicUrl = "https://storage.googleapis.com/tg-bot-6e4ea.appspot.com/328b7093-22db-425b-90b8-d8297d51207a.mp4"; // Replace with your public video URL
-    await downloadVideo(videoPublicUrl, videoPath);
-
     await streamAudio(ctx);
   } catch (error) {
     ctx.reply("An error occurred while setting up the stream.");
@@ -70,8 +67,19 @@ async function streamAudio(ctx) {
       throw new Error("No valid audio documents found in the collection.");
     }
 
-    // Store audio URLs
-    audioUrls = audioDocs.map(doc => doc.url);
+    // Download all audio files locally
+    audioFiles = []; // Reset the audio files array
+    for (let i = 0; i < audioDocs.length; i++) {
+      const audioDoc = audioDocs[i];
+      const localFilePath = path.resolve(__dirname, `audio${i}.mp3`);
+      await downloadAudio(audioDoc.url, localFilePath);
+      audioFiles.push(localFilePath);
+    }
+
+    // Create a temporary file to list the audio files for ffmpeg concat
+    const audioListPath = path.resolve(__dirname, "audioList.txt");
+    const audioListContent = audioFiles.map(file => `file '${file}'`).join('\n');
+    fs.writeFileSync(audioListPath, audioListContent);
 
     // Initialize FFmpeg command with the video loop and concatenated audio
     function startFfmpegCommand() {
@@ -81,18 +89,18 @@ async function streamAudio(ctx) {
           "-stream_loop -1", // Loop the video infinitely
           "-re" // Read input at native frame rate for live streaming
         ])
-        .input(audioUrls[currentTrackIndex])
+        .input(audioListPath)
         .inputOptions([
+          "-f concat",
+          "-safe 0", // Allow unsafe file paths
           "-re" // Read input at native frame rate for live streaming
         ])
         .outputOptions([
           "-map 0:v:0", // Use the video stream from the first input
-          "-map 1:a:0", // Use the audio stream from the current audio URL
-          "-c:v libx264",  // Video codec
-          "-b:v 6800k",
+          "-map 1:a:0", // Use the audio stream from the concatenated input
+          "-c:v copy",  // Copy video codec to avoid re-encoding
           "-c:a aac",      // Audio codec
-          "-b:a 128k",     // Audio bitrate
-          "-strict -2",    // Needed for some ffmpeg builds
+          "-b:a 64k",     // Reduced audio bitrate
           "-f flv",        // Output format
           "-flush_packets 0", // Ensure no packet is dropped during streaming
           "-reconnect 1", // Reconnect if connection is lost
@@ -109,10 +117,10 @@ async function streamAudio(ctx) {
           console.error("ffmpeg stderr: " + stderr);
           // Handle error gracefully
           isStreaming = false; // Reset streaming status on error
+          cleanUpAudioFiles(); // Delete downloaded audio files
         })
         .on("end", async function () {
           console.log("Audio finished! Restarting with new audio...");
-          currentTrackIndex = (currentTrackIndex + 1) % audioUrls.length;
           await streamAudio(ctx); // Restart streaming with the next track
         })
         .output(youtubeStreamUrl)
@@ -125,6 +133,7 @@ async function streamAudio(ctx) {
     ctx.reply("An error occurred while streaming audio.");
     console.error("Error in streamAudio function: ", error.message);
     isStreaming = false; // Reset streaming status on error
+    cleanUpAudioFiles(); // Delete downloaded audio files
   }
 }
 
@@ -135,10 +144,25 @@ function stopLivestream(ctx) {
     ctx.reply("Stream stopped successfully.");
     console.log("Stream stopped successfully.");
     isStreaming = false; // Reset streaming status on stop
+    cleanUpAudioFiles(); // Delete downloaded audio files
   } else {
     ctx.reply("No active stream to stop.");
     console.log("No active stream to stop.");
   }
+}
+
+// Function to clean up downloaded audio files
+function cleanUpAudioFiles() {
+  for (const file of audioFiles) {
+    fs.unlink(file, (err) => {
+      if (err) {
+        console.error(`Failed to delete file ${file}: `, err);
+      } else {
+        console.log(`Deleted file ${file}`);
+      }
+    });
+  }
+  audioFiles = []; // Reset the audio files array
 }
 
 // Function to get the duration of the video
