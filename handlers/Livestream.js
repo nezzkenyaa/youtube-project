@@ -19,10 +19,10 @@ let audioFiles = []; // Array to store paths of downloaded audio files
 // Replace this with your YouTube stream URL
 const youtubeStreamUrl = process.env.S_URL;
 
-// Path to the video file in the root path
+// Path to the short video file in the root path
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
-const videoPath = path.resolve(__dirname, "sp.mp4");
+const shortVideoPath = path.resolve(__dirname, "v.mp4");
 
 // Function to download an audio file locally
 async function downloadAudio(url, filepath) {
@@ -81,10 +81,10 @@ async function streamAudio(ctx) {
     const audioListContent = audioFiles.map(file => `file '${file}'`).join('\n');
     fs.writeFileSync(audioListPath, audioListContent);
 
-    // Initialize FFmpeg command with the video loop and concatenated audio
+    // Initialize FFmpeg command with the short video loop and concatenated audio
     function startFfmpegCommand() {
       ffmpegProcess = ffmpeg()
-        .input(videoPath)
+        .input(shortVideoPath)
         .inputOptions([
           "-stream_loop -1", // Loop the video infinitely
           "-re" // Read input at native frame rate for live streaming
@@ -98,12 +98,10 @@ async function streamAudio(ctx) {
         .outputOptions([
           "-map 0:v:0", // Use the video stream from the first input
           "-map 1:a:0", // Use the audio stream from the concatenated input
-          "-c:v libx264",  // Use libx264 codec for video encoding
-          "-b:v 500k", // Significantly reduced video bitrate
-          "-s 640x360", // Reduced resolution
-          "-c:a aac",      // Audio codec
-          "-b:a 32k",     // Reduced audio bitrate
-          "-f flv",        // Output format
+          "-c:v copy", // Copy video codec to avoid re-encoding
+          "-c:a aac", // Audio codec
+          "-b:a 64k", // Reduced audio bitrate
+          "-f flv", // Output format
           "-flush_packets 0", // Ensure no packet is dropped during streaming
           "-reconnect 1", // Reconnect if connection is lost
           "-reconnect_streamed 1", // Reconnect when the current stream is finished
