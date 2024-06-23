@@ -2,7 +2,7 @@ import db from "../database/connection.js";
 
 export default async function getRandomDocument() {
   try {
-    const collection = db.collection("global_18_6");
+    const collection = db.collection("audi");
 
     // Retrieve all documents from the collection
     const allDocs = await collection.find({}).toArray();
