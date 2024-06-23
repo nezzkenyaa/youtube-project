@@ -93,7 +93,6 @@ async function streamAudio(ctx) {
         .inputOptions([
           "-f concat",
           "-safe 0", // Allow unsafe file paths
-          "-stream_loop -1", // Loop the audio infinitely
           "-re" // Read input at native frame rate for live streaming
         ])
         .outputOptions([
@@ -124,6 +123,8 @@ async function streamAudio(ctx) {
           console.log("Stream ended.");
           isStreaming = false;
           cleanUpAudioFiles(); // Delete downloaded audio files
+          // Fetch new documents and restart streaming
+          startLivestream(ctx);
         })
         .output(youtubeStreamUrl)
         .run();
