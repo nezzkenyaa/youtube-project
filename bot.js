@@ -1,13 +1,13 @@
 import { Telegraf } from "telegraf";
 import "dotenv/config";
-import uploadVideo from "./handlers/upload.js";
-import { startLivestream, stopLivestream } from "./handlers/Livestream.js";
+import { cleanUpAudioFiles, startLivestream, stopLivestream } from "./handlers/Livestream.js";
 import Firebase from "./handlers/Firebase.js";
-import downloadAndUploadYouTubeVideo from "./handlers/Ytdl.js";
 import uploadAudio from "./handlers/Audiodl.js";
 import { message } from "telegraf/filters";
 
 const bot = new Telegraf(process.env.TOKEN);
+
+let streamTimer = null; // Store the timer ID for stopping the stream
 
 bot.start((ctx) => ctx.reply("Welcome"));
 
@@ -24,10 +24,14 @@ bot.on(message('text'), async (ctx) => {
   } else if (text === "hi") {
     ctx.reply("hi too");
   } else if (text === "stream") {
-    startLivestream(ctx);
+    await startStreamWithInterval(ctx);
   } else if (text === "stop") {
     stopLivestream(ctx);
-  } else if (text === "auth") {
+    clearInterval(streamTimer); // Clear the interval when manually stopping
+  }
+  else if (text === "clean") {
+    cleanUpAudioFiles();
+  }  else if (text === "auth") {
     const id = ctx.from.id;
     ctx.reply(`${process.env.BASE_URL}/auth?id=${id}`);
   } else if (text === "token") {
@@ -58,6 +62,23 @@ function isValidUrl(string) {
   } catch (_) {
     return false;
   }
+}
+
+// Start stream and set a timer for 1 hour
+async function startStreamWithInterval(ctx) {
+  // Start the stream immediately
+  await startLivestream(ctx);
+
+  // Set a timeout to stop the stream after 1 hour (60 minutes = 3600000ms)
+  streamTimer = setTimeout(async () => {
+    await stopLivestream(ctx);
+    console.log("Stream stopped after 1 hour.");
+
+    // Automatically start the stream again after it stops
+    await startLivestream(ctx);
+    console.log("Stream restarted after 1 hour.");
+
+  }, 3600000); // 1 hour
 }
 
 bot.on("video", async (ctx) => {
