@@ -22,7 +22,7 @@ const youtubeStreamUrl = process.env.S_URL;
 // Path to the short video file in the root path
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
-const shortVideoPath = path.resolve(__dirname, "t.mp4");
+const shortVideoPath = path.resolve(__dirname, "s.mp4");
 
 // Function to download an audio file locally
 async function downloadAudio(url, filepath) {

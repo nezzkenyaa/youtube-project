@@ -7,7 +7,7 @@ import db from "../database/connection.js";
 // Initialize Firebase Admin SDK
 admin.initializeApp({
   credential: admin.credential.cert(serviceAccount),
-  storageBucket: "tg-bot-6e4ea.appspot.com",
+  storageBucket: "e-da8f2.appspot.com",
 });
 
 export const bucket = admin.storage().bucket();
