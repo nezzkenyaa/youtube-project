@@ -19,7 +19,7 @@ const liveAudioUrl = process.env.AUDIO_URL || "https://gene-wr08.ice.infomaniak.
 // Path to the short video file in the root path
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
-const shortVideoPath = path.resolve(__dirname, "..", "t.mp4"); // Adjusted path since this is in handlers folder
+const shortVideoPath = path.resolve(__dirname, "..", "s.mp4"); // Adjusted path since this is in handlers folder
 
 let isStreaming = false;
 let ffmpegProcess = null;
@@ -95,12 +95,19 @@ async function streamAudio() {
           "-map 0:v:0",       // Use the video stream from the first input (looped video)
           "-map 1:a:0",       // Use the audio stream from the live audio input
           "-c:v libx264",     // Use H.264 codec for video encoding
-          "-preset veryfast", // Balance between encoding speed and quality
-          "-b:v 6000k",       // Set video bitrate to 6000 Kbps
-          "-maxrate 6000k",   // Set maximum bitrate for the video
-          "-bufsize 12000k",  // Set buffer size for smoother streaming
+          "-preset faster",   // Faster preset for better performance
+          "-tune zerolatency", // Optimize for low latency streaming
+          "-b:v 6800k",       // Set video bitrate to 6800 Kbps (YouTube recommended)
+          "-minrate 6800k",   // Set minimum bitrate
+          "-maxrate 6800k",   // Set maximum bitrate for consistent quality
+          "-bufsize 13600k",  // Set buffer size (2x bitrate for stability)
+          "-g 60",            // GOP size (keyframe interval) - 2 seconds at 30fps
+          "-keyint_min 60",   // Minimum keyframe interval
+          "-sc_threshold 0",  // Disable scene change detection
           "-c:a aac",         // Use AAC codec for audio encoding
-          "-b:a 128k",        // Set audio bitrate to 128 Kbps
+          "-b:a 160k",        // Increase audio bitrate to 160 Kbps for better quality
+          "-ar 44100",        // Set audio sample rate to 44.1kHz
+          "-ac 2",            // Stereo audio (2 channels)
           "-f flv",           // Output format for live streaming (YouTube/Twitch)
           "-flush_packets 0", // Ensure no packet is dropped during streaming
           "-reconnect 1",     // Reconnect if connection is lost
