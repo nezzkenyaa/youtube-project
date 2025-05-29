@@ -26,6 +26,7 @@ let ffmpegProcess = null;
 let telegramContext = null; // Store Telegram context for notifications
 
 // Function to test audio stream connectivity
+// Function to test audio stream connectivity
 async function testAudioStream() {
   return new Promise((resolve, reject) => {
     console.log("Testing audio stream connectivity...");
@@ -38,9 +39,9 @@ async function testAudioStream() {
         "-timeout 5000000" // 5 second timeout
       ])
       .outputOptions([
-        "-f null", // Null output (just test connection)
-        "-"
+        "-f null" // Null output (just test connection)
       ])
+      .output("-") // Specify stdout as output for null format
       .on("start", () => {
         console.log("Audio stream test started...");
       })
