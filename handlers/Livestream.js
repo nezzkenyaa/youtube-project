@@ -25,6 +25,43 @@ let isStreaming = false;
 let ffmpegProcess = null;
 let telegramContext = null; // Store Telegram context for notifications
 
+// Function to test audio stream connectivity
+async function testAudioStream() {
+  return new Promise((resolve, reject) => {
+    console.log("Testing audio stream connectivity...");
+    
+    const testProcess = ffmpeg()
+      .input(liveAudioUrl)
+      .inputOptions([
+        "-t 5", // Test for 5 seconds only
+        "-reconnect 1",
+        "-timeout 5000000" // 5 second timeout
+      ])
+      .outputOptions([
+        "-f null", // Null output (just test connection)
+        "-"
+      ])
+      .on("start", () => {
+        console.log("Audio stream test started...");
+      })
+      .on("end", () => {
+        console.log("✅ Audio stream test successful");
+        resolve(true);
+      })
+      .on("error", (err) => {
+        console.error("❌ Audio stream test failed:", err.message);
+        reject(err);
+      })
+      .run();
+    
+    // Timeout after 10 seconds
+    setTimeout(() => {
+      testProcess.kill('SIGTERM');
+      reject(new Error("Audio stream test timeout"));
+    }, 10000);
+  });
+}
+
 // Function to start live streaming
 async function startLivestream(ctx = null) {
   telegramContext = ctx; // Store context for notifications
@@ -63,6 +100,14 @@ async function startLivestream(ctx = null) {
     const message = "🚀 Starting livestream...";
     console.log(message);
     if (ctx) ctx.reply(message);
+    
+    // Test audio stream first
+    try {
+      await testAudioStream();
+    } catch (error) {
+      throw new Error(`Audio stream test failed: ${error.message}`);
+    }
+    
     await streamAudio();
   } catch (error) {
     const message = `Error in startLivestream function: ${error.message}`;
@@ -89,30 +134,29 @@ async function streamAudio() {
           "-re", // Read input at native frame rate for live streaming
           "-reconnect 1", // Reconnect if connection is lost
           "-reconnect_streamed 1", // Reconnect when the current stream is finished
-          "-reconnect_delay_max 5" // Maximum delay between reconnect attempts
+          "-reconnect_delay_max 5", // Maximum delay between reconnect attempts
+          "-reconnect_at_eof 1", // Reconnect at end of file
+          "-timeout 10000000" // Set timeout to 10 seconds (in microseconds)
         ])
         .outputOptions([
           "-map 0:v:0",       // Use the video stream from the first input (looped video)
           "-map 1:a:0",       // Use the audio stream from the live audio input
           "-c:v libx264",     // Use H.264 codec for video encoding
-          "-preset faster",   // Faster preset for better performance
-          "-tune zerolatency", // Optimize for low latency streaming
-          "-b:v 6800k",       // Set video bitrate to 6800 Kbps (YouTube recommended)
-          "-minrate 6800k",   // Set minimum bitrate
-          "-maxrate 6800k",   // Set maximum bitrate for consistent quality
-          "-bufsize 13600k",  // Set buffer size (2x bitrate for stability)
-          "-g 60",            // GOP size (keyframe interval) - 2 seconds at 30fps
-          "-keyint_min 60",   // Minimum keyframe interval
-          "-sc_threshold 0",  // Disable scene change detection
+          "-preset veryfast", // Use veryfast preset for stability
+          "-profile:v baseline", // Use baseline profile for better compatibility
+          "-level 3.1",       // Set H.264 level for compatibility
+          "-b:v 4500k",       // Set video bitrate to 4500 Kbps (more conservative)
+          "-maxrate 5000k",   // Set maximum bitrate
+          "-bufsize 10000k",  // Set buffer size
+          "-r 30",            // Force 30 fps output
+          "-g 60",            // GOP size (keyframe every 2 seconds at 30fps)
           "-c:a aac",         // Use AAC codec for audio encoding
-          "-b:a 160k",        // Increase audio bitrate to 160 Kbps for better quality
+          "-b:a 128k",        // Set audio bitrate to 128 Kbps
           "-ar 44100",        // Set audio sample rate to 44.1kHz
           "-ac 2",            // Stereo audio (2 channels)
-          "-f flv",           // Output format for live streaming (YouTube/Twitch)
-          "-flush_packets 0", // Ensure no packet is dropped during streaming
-          "-reconnect 1",     // Reconnect if connection is lost
-          "-reconnect_streamed 1", // Reconnect when the current stream is finished
-          "-reconnect_delay_max 5" // Maximum delay between reconnect attempts (in seconds)
+          "-f flv",           // Output format for live streaming
+          "-flvflags no_duration_filesize", // FLV compatibility flags
+          "-avoid_negative_ts make_zero" // Handle timestamp issues
         ])
         .on("start", function (commandLine) {
           const message = "✅ Stream started successfully!";
@@ -122,25 +166,41 @@ async function streamAudio() {
         })
         .on("error", function (err, stdout, stderr) {
           const message = `❌ Stream error: ${err.message}`;
-          console.error("An error occurred during streaming.");
-          console.error("Error: " + err.message);
+          console.error("=== FFmpeg Error Details ===");
+          console.error("Error message:", err.message);
+          console.error("Error code:", err.code);
+          console.error("Signal:", err.signal);
+          
           if (stderr) {
-            console.error("ffmpeg stderr: " + stderr);
+            console.error("=== FFmpeg stderr ===");
+            console.error(stderr);
           }
+          
+          if (stdout) {
+            console.error("=== FFmpeg stdout ===");
+            console.error(stdout);
+          }
+          
+          console.error("=== End Error Details ===");
           
           if (telegramContext) telegramContext.reply(message);
           
           // Handle error gracefully
           isStreaming = false;
           
-          // Attempt to restart after a delay if it's a connection issue
-          setTimeout(() => {
-            if (!isStreaming) {
-              console.log("Attempting to restart stream...");
-              if (telegramContext) telegramContext.reply("🔄 Attempting to restart stream...");
-              startLivestream();
-            }
-          }, 10000); // Wait 10 seconds before restarting
+          // Only restart if it's not a segmentation fault
+          if (err.signal !== 'SIGSEGV') {
+            setTimeout(() => {
+              if (!isStreaming) {
+                console.log("Attempting to restart stream...");
+                if (telegramContext) telegramContext.reply("🔄 Attempting to restart stream...");
+                startLivestream();
+              }
+            }, 15000); // Wait 15 seconds before restarting
+          } else {
+            console.error("Segmentation fault detected. Manual restart required.");
+            if (telegramContext) telegramContext.reply("💥 Critical error occurred. Please restart manually with 'stream' command.");
+          }
         })
         .on("end", function () {
           console.log("Stream ended.");
