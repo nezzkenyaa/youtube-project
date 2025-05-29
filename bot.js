@@ -1,108 +1,145 @@
 import { Telegraf } from "telegraf";
 import "dotenv/config";
-import { cleanUpAudioFiles, startLivestream, stopLivestream } from "./handlers/Livestream.js";
-import Firebase from "./handlers/Firebase.js";
-import uploadAudio from "./handlers/Audiodl.js";
+import { startLivestream, stopLivestream, getStreamStatus } from "./handlers/Livestream.js";
 import { message } from "telegraf/filters";
 
 const bot = new Telegraf(process.env.TOKEN);
 
-let streamTimer = null; // Store the timer ID for stopping the stream
+// Error handling middleware
+bot.catch((err, ctx) => {
+  console.error('Bot error:', err);
+  ctx.reply('❌ An error occurred. Please try again.');
+});
 
-bot.start((ctx) => ctx.reply("Welcome"));
+// Start command
+bot.start((ctx) => {
+  const welcomeMessage = `
+🤖 Welcome to Livestream Bot!
 
+Available commands:
+• Type "hi" - Say hello
+• Type "stream" - Start livestream
+• Type "stop" - Stop livestream  
+• Type "status" - Check stream status
+• Type "help" - Show this help message
+  `;
+  ctx.reply(welcomeMessage);
+});
+
+// Help command
+bot.command('help', (ctx) => {
+  const helpMessage = `
+📋 Available commands:
+
+• "hi" - Say hello
+• "stream" - Start livestream
+• "stop" - Stop livestream
+• "status" - Check stream status
+• "help" - Show this help message
+
+🔴 To start streaming: Type "stream"
+⏹️ To stop streaming: Type "stop"
+📊 To check status: Type "status"
+  `;
+  ctx.reply(helpMessage);
+});
+
+// Text message handler
 bot.on(message('text'), async (ctx) => {
-  const text = ctx.message.text;
-  if (isValidUrl(text) && text.includes("youtu")) {
-    try {
-      await downloadAndUploadYouTubeVideo(ctx, text);
-      ctx.reply("Video downloaded and uploaded to Firebase!");
-    } catch (error) {
-      console.error("Error in downloading or uploading video:", error);
-      ctx.reply("An error occurred while processing the video.");
+  const text = ctx.message.text.toLowerCase().trim();
+  const userId = ctx.from.id;
+  const username = ctx.from.username || ctx.from.first_name || 'User';
+  
+  console.log(`Message from ${username} (${userId}): ${text}`);
+  
+  try {
+    switch (text) {
+      case "hi":
+        ctx.reply(`👋 Hi ${username}! How can I help you today?`);
+        break;
+        
+      case "stream":
+        ctx.reply("🔄 Processing your request to start the stream...");
+        await startLivestream(ctx);
+        break;
+        
+      case "stop":
+        ctx.reply("🔄 Processing your request to stop the stream...");
+        stopLivestream(ctx);
+        break;
+        
+      case "status":
+        const status = getStreamStatus();
+        const statusMessage = status.isStreaming 
+          ? "🔴 Stream is currently ACTIVE"
+          : "⚫ Stream is currently STOPPED";
+        ctx.reply(statusMessage);
+        break;
+        
+      case "help":
+        ctx.reply(`
+📋 Available commands:
+
+• "hi" - Say hello
+• "stream" - Start livestream
+• "stop" - Stop livestream
+• "status" - Check stream status
+• "help" - Show this help message
+        `);
+        break;
+        
+      default:
+        ctx.reply(`
+❓ I don't understand "${text}".
+
+Type "help" to see available commands.
+        `);
+        break;
     }
-  } else if (text === "hi") {
-    ctx.reply("hi too");
-  } else if (text === "stream") {
-    await startStreamWithInterval(ctx);
-  } else if (text === "stop") {
-    stopLivestream(ctx);
-    clearInterval(streamTimer); // Clear the interval when manually stopping
-  }
-  else if (text === "clean") {
-    cleanUpAudioFiles();
-  }  else if (text === "auth") {
-    const id = ctx.from.id;
-    ctx.reply(`${process.env.BASE_URL}/auth?id=${id}`);
-  } else if (text === "token") {
-    const user = ctx.from.id.toString();
-    console.log(user);
-    try {
-      const userd = await fetch("https://super-garbanzo-6w645q74gqr26vq-3000.app.github.dev/details", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({ id: user }),
-      });
-      const userDetails = await userd.json();
-      const token = userDetails.tokens.access_token;
-      ctx.reply(token);
-    } catch (error) {
-      console.error("Error fetching token:", error);
-      ctx.reply("An error occurred while fetching the token.");
-    }
-  }
-});
-
-function isValidUrl(string) {
-  try {
-    new URL(string);
-    return true;
-  } catch (_) {
-    return false;
-  }
-}
-
-// Start stream and set a timer for 1 hour
-async function startStreamWithInterval(ctx) {
-  // Start the stream immediately
-  await startLivestream(ctx);
-
-  // Set a timeout to stop the stream after 1 hour (60 minutes = 3600000ms)
-  streamTimer = setTimeout(async () => {
-    await stopLivestream(ctx);
-    console.log("Stream stopped after 1 hour.");
-
-    // Automatically start the stream again after it stops
-    await startLivestream(ctx);
-    console.log("Stream restarted after 1 hour.");
-
-  }, 3600000); // 1 hour
-}
-
-bot.on("video", async (ctx) => {
-  try {
-    const file_id = ctx.message.video.file_id;
-    await Firebase(ctx, file_id);
   } catch (error) {
-    console.error("Error in bot handler:", error);
-    ctx.reply("An error occurred while uploading the video.");
+    console.error('Error handling message:', error);
+    ctx.reply('❌ An error occurred while processing your request. Please try again.');
   }
 });
 
-bot.on("audio", async (ctx) => {
+// Handle unknown commands
+bot.on('message', (ctx) => {
+  ctx.reply('❓ I only understand text messages. Please send a text command.');
+});
+
+// Graceful shutdown
+const gracefulShutdown = (signal) => {
+  console.log(`\nReceived ${signal}, shutting down gracefully...`);
+  
+  // Stop any active streams
   try {
-    const file_id = ctx.message.audio.file_id;
-    await uploadAudio(ctx, file_id);
+    stopLivestream();
   } catch (error) {
-    console.error("Error in bot handler:", error);
-    ctx.reply("An error occurred while uploading the audio.");
+    console.error('Error stopping stream during shutdown:', error);
   }
+  
+  // Stop the bot
+  bot.stop(signal);
+  
+  // Exit the process
+  setTimeout(() => {
+    console.log('Forcing exit...');
+    process.exit(0);
+  }, 5000);
+};
+
+// Handle process termination signals
+process.once("SIGINT", () => gracefulShutdown("SIGINT"));
+process.once("SIGTERM", () => gracefulShutdown("SIGTERM"));
+
+// Handle uncaught exceptions
+process.on('uncaughtException', (error) => {
+  console.error('Uncaught Exception:', error);
+  gracefulShutdown('uncaughtException');
 });
 
-// Enable graceful stop
-process.once("SIGINT", () => bot.stop("SIGINT"));
-process.once("SIGTERM", () => bot.stop("SIGTERM"));
+process.on('unhandledRejection', (reason, promise) => {
+  console.error('Unhandled Rejection at:', promise, 'reason:', reason);
+});
 
 export default bot;
