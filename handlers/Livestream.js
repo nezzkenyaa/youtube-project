@@ -138,6 +138,9 @@ function createStreamCommand() {
  * Handles stream restart with delay
  */
 function scheduleRestart(delay = 5000, reason = "") {
+  if (reason === "Unknown error") {
+    return;
+  }
   if (reason) {
     console.log(`Restart scheduled: ${reason}`);
   }
