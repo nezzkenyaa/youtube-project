@@ -13,7 +13,8 @@
   },
   "scripts": {
     "test": "nodemon index.js",
-    "run": "node index.js"
+    "run": "node index.js",
+    "start": "node index.js"
   },
   "keywords": [],
   "author": "",
