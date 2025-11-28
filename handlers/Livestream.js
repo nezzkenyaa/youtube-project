@@ -1,298 +1,329 @@
 import ffmpeg from "fluent-ffmpeg";
-import ffmpegPath from "ffmpeg-static";
-import ffprobe from "ffprobe-static";
 import fs from "fs";
 import path from "path";
-import { fileURLToPath } from 'url';
-import "dotenv/config"
+import { fileURLToPath } from "url";
+import { exec } from "child_process";
+import { promisify } from "util";
+import "dotenv/config";
 
-// Set the path to the precompiled ffmpeg binary
-ffmpeg.setFfmpegPath(ffmpegPath);
-ffmpeg.setFfprobePath(ffprobe.path);
+const execAsync = promisify(exec);
 
-// Replace this with your YouTube stream URL
-const youtubeStreamUrl = process.env.S_URL;
+// Environment variables
+const YOUTUBE_STREAM_URL = process.env.S_URL;
+const LIVE_AUDIO_URL =
+  process.env.AUDIO_URL ||
+  "https://hiphoplive.radionoise.ro:9110/stream?type=http&nocache=228";
 
-// Replace this with your live audio stream URL
-const liveAudioUrl = process.env.AUDIO_URL || "https://gene-wr08.ice.infomaniak.ch/gene-wr08.aac";
-
-// Path to the short video file in the root path
+// File paths
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
-const shortVideoPath = path.resolve(__dirname, "..", "s.mp4"); // Adjusted path since this is in handlers folder
+const SHORT_VIDEO_PATH = path.resolve(__dirname, "..", "t.mp4");
 
+// Stream state
 let isStreaming = false;
 let ffmpegProcess = null;
-let telegramContext = null; // Store Telegram context for notifications
+let telegramContext = null;
 
-// Function to test audio stream connectivity
-// Function to test audio stream connectivity
-async function testAudioStream() {
-  return new Promise((resolve, reject) => {
-    console.log("Testing audio stream connectivity...");
-    
-    const testProcess = ffmpeg()
-      .input(liveAudioUrl)
-      .inputOptions([
-        "-t 5", // Test for 5 seconds only
-        "-reconnect 1",
-        "-timeout 5000000" // 5 second timeout
-      ])
-      .outputOptions([
-        "-f null" // Null output (just test connection)
-      ])
-      .output("-") // Specify stdout as output for null format
-      .on("start", () => {
-        console.log("Audio stream test started...");
-      })
-      .on("end", () => {
-        console.log("✅ Audio stream test successful");
-        resolve(true);
-      })
-      .on("error", (err) => {
-        console.error("❌ Audio stream test failed:", err.message);
-        reject(err);
-      })
-      .run();
-    
-    // Timeout after 10 seconds
-    setTimeout(() => {
-      testProcess.kill('SIGTERM');
-      reject(new Error("Audio stream test timeout"));
-    }, 10000);
-  });
+/**
+ * Detect and set FFmpeg path (prefer system FFmpeg)
+ */
+async function detectFFmpegPath() {
+  try {
+    // Try to find system FFmpeg first
+    const { stdout } = await execAsync("which ffmpeg");
+    const systemPath = stdout.trim();
+    if (systemPath) {
+      console.log(`✓ Using system FFmpeg: ${systemPath}`);
+      ffmpeg.setFfmpegPath(systemPath);
+      return true;
+    }
+  } catch (error) {
+    console.log("System FFmpeg not found, trying ffmpeg-static...");
+  }
+
+  try {
+    // Fallback to ffmpeg-static
+    const ffmpegStatic = await import("ffmpeg-static");
+    console.log(`✓ Using ffmpeg-static: ${ffmpegStatic.default}`);
+    ffmpeg.setFfmpegPath(ffmpegStatic.default);
+    return true;
+  } catch (error) {
+    console.error("❌ No FFmpeg found. Install with: sudo apt install ffmpeg");
+    return false;
+  }
 }
 
-// Function to start live streaming
-// Function to start live streaming with better error handling
-async function startLivestream(ctx = null) {
-  telegramContext = ctx; // Store context for notifications
-  
-  if (isStreaming) {
-    const message = "A stream is already running. Please wait for it to finish.";
-    console.log(message);
+/**
+ * Validates required files and environment variables
+ */
+function validateRequirements(ctx) {
+  if (!fs.existsSync(SHORT_VIDEO_PATH)) {
+    const message = `❌ Video file not found: ${SHORT_VIDEO_PATH}`;
+    console.error(message);
     if (ctx) ctx.reply(message);
+    return false;
+  }
+
+  if (!YOUTUBE_STREAM_URL) {
+    const message =
+      "❌ YouTube stream URL not set. Configure S_URL environment variable.";
+    console.error(message);
+    if (ctx) ctx.reply(message);
+    return false;
+  }
+
+  if (!LIVE_AUDIO_URL) {
+    const message =
+      "❌ Audio URL not set. Configure AUDIO_URL environment variable.";
+    console.error(message);
+    if (ctx) ctx.reply(message);
+    return false;
+  }
+
+  return true;
+}
+
+/**
+ * Sends notification message to console and Telegram
+ */
+function notify(message, ctx = telegramContext) {
+  console.log(message);
+  if (ctx) ctx.reply(message);
+}
+
+/**
+ * Creates FFmpeg streaming command with maximum compatibility
+ */
+function createStreamCommand() {
+  return ffmpeg()
+    .input(SHORT_VIDEO_PATH)
+    .inputOptions(["-stream_loop -1", "-re"])
+    .input(LIVE_AUDIO_URL)
+    .inputOptions([
+      "-re",
+      "-reconnect 1",
+      "-reconnect_streamed 1",
+      "-reconnect_delay_max 5",
+      "-reconnect_at_eof 1",
+      "-timeout 10000000",
+    ])
+    .outputOptions([
+      "-map 0:v:0",
+      "-map 1:a:0",
+      // Video encoding - simplified for maximum compatibility
+      "-c:v libx264",
+      "-preset ultrafast",
+      "-tune zerolatency",
+      "-pix_fmt yuv420p",
+      "-b:v 2500k",
+      "-maxrate 3000k",
+      "-bufsize 5000k",
+      "-r 30",
+      "-g 60",
+      "-sc_threshold 0",
+      // Audio encoding - simplified
+      "-c:a aac",
+      "-b:a 128k",
+      "-ar 44100",
+      "-ac 2",
+      // Output format
+      "-f flv",
+      // Error recovery
+      "-max_muxing_queue_size 1024",
+    ])
+    .output(YOUTUBE_STREAM_URL);
+}
+
+/**
+ * Handles stream restart with delay
+ */
+function scheduleRestart(delay = 5000, reason = "") {
+  if (reason) {
+    console.log(`Restart scheduled: ${reason}`);
+  }
+
+  setTimeout(() => {
+    if (!isStreaming) {
+      console.log("Attempting automatic restart...");
+      notify("🔄 Restarting stream...");
+      startStream();
+    }
+  }, delay);
+}
+
+/**
+ * Starts the FFmpeg streaming process
+ */
+function startStream() {
+  console.log("Initializing FFmpeg stream...");
+
+  ffmpegProcess = createStreamCommand()
+    .on("start", (commandLine) => {
+      notify("✅ Stream started successfully!");
+      console.log("FFmpeg command:", commandLine);
+    })
+    .on("error", (err, stdout, stderr) => {
+      console.error("=== Stream Error ===");
+      console.error("Message:", err.message);
+      console.error("Signal:", err.signal);
+
+      if (stderr) {
+        // Show more context for debugging
+        const stderrLines = stderr.split("\n");
+        const errorContext = stderrLines.slice(-15).join("\n");
+        console.error("=== Last 15 lines of stderr ===");
+        console.error(errorContext);
+      }
+
+      notify(`❌ Stream error: ${err.message}`);
+      isStreaming = false;
+      ffmpegProcess = null;
+
+      // Handle different error types
+      if (err.signal === "SIGSEGV") {
+        notify("💥 FFmpeg crashed (SIGSEGV)");
+        notify("🔧 Please install system FFmpeg:");
+        notify("   sudo apt update && sudo apt install ffmpeg");
+        notify("   Then restart the application");
+        // Don't auto-restart on segfault
+      } else if (
+        err.message.includes("Connection") ||
+        err.message.includes("timed out")
+      ) {
+        notify("🌐 Network error - retrying in 15 seconds");
+        scheduleRestart(15000, "Network error");
+      } else if (err.message.includes("Conversion failed")) {
+        notify("⚠️ Encoding error - retrying with different settings");
+        scheduleRestart(10000, "Encoding error");
+      } else {
+        notify("⚠️ Unexpected error - retrying in 30 seconds");
+        scheduleRestart(30000, "Unknown error");
+      }
+    })
+    .on("end", () => {
+      console.log("Stream ended normally.");
+      isStreaming = false;
+      ffmpegProcess = null;
+      notify("⏹️ Stream ended. Restarting in 5 seconds...");
+      scheduleRestart(5000, "Normal end");
+    })
+    .on("progress", (progress) => {
+      // Log every 30 seconds to show stream is alive
+      if (progress.timemark) {
+        const match = progress.timemark.match(/(\d{2}):(\d{2})/);
+        if (match) {
+          const seconds = parseInt(match[2]);
+          if (seconds % 30 === 0) {
+            console.log(
+              `[${new Date().toLocaleTimeString()}] Stream running: ${
+                progress.timemark
+              }`
+            );
+          }
+        }
+      }
+    })
+    .run();
+}
+
+/**
+ * Starts the livestream
+ */
+async function startLivestream(ctx = null) {
+  telegramContext = ctx;
+
+  if (isStreaming) {
+    notify("⚠️ Stream already running. Use 'stop' to end current stream.", ctx);
     return;
   }
 
-  // Check if required files/URLs exist
-  if (!fs.existsSync(shortVideoPath)) {
-    const message = `Short video file not found: ${shortVideoPath}`;
-    console.error(message);
-    if (ctx) ctx.reply(`❌ Error: ${message}`);
+  if (!validateRequirements(ctx)) {
     return;
   }
 
-  if (!youtubeStreamUrl) {
-    const message = "YouTube stream URL not provided. Set S_URL environment variable.";
-    console.error(message);
-    if (ctx) ctx.reply(`❌ Error: ${message}`);
-    return;
-  }
-
-  if (!liveAudioUrl) {
-    const message = "Live audio URL not provided. Set AUDIO_URL environment variable.";
-    console.error(message);
-    if (ctx) ctx.reply(`❌ Error: ${message}`);
+  // Detect and configure FFmpeg
+  const ffmpegFound = await detectFFmpegPath();
+  if (!ffmpegFound) {
+    notify("❌ FFmpeg not found. Install with: sudo apt install ffmpeg", ctx);
     return;
   }
 
   try {
     isStreaming = true;
-    const message = "🚀 Starting livestream...";
-    console.log(message);
-    if (ctx) ctx.reply(message);
-    
-    // Try the robust test first, fall back to simple test if needed
-    try {
-      await testAudioStream();
-    } catch (error) {
-      console.log("⚠️ Robust test failed, trying simple test...");
-      try {
-        await simpleAudioTest();
-      } catch (simpleError) {
-        console.log("⚠️ Simple test also failed, proceeding with stream anyway...");
-        console.log("Stream may still work despite test failures");
-      }
-    }
-    
-    await streamAudio();
+    notify("🚀 Starting livestream...", ctx);
+    startStream();
   } catch (error) {
-    const message = `Error in startLivestream function: ${error.message}`;
-    console.error(message);
-    if (ctx) ctx.reply(`❌ ${message}`);
-    isStreaming = false; // Reset streaming status on error
+    notify(`❌ Failed to start: ${error.message}`, ctx);
+    isStreaming = false;
   }
 }
 
-// Function to handle the audio streaming and switching
-async function streamAudio() {
-  try {
-    function startFfmpegCommand() {
-      console.log("Starting FFmpeg command...");
-      
-      ffmpegProcess = ffmpeg()
-        .input(shortVideoPath)
-        .inputOptions([
-          "-stream_loop -1", // Loop the video infinitely
-          "-re" // Read input at native frame rate for live streaming
-        ])
-        .input(liveAudioUrl)
-        .inputOptions([
-          "-re", // Read input at native frame rate for live streaming
-          "-reconnect 1", // Reconnect if connection is lost
-          "-reconnect_streamed 1", // Reconnect when the current stream is finished
-          "-reconnect_delay_max 5", // Maximum delay between reconnect attempts
-          "-reconnect_at_eof 1", // Reconnect at end of file
-          "-timeout 10000000" // Set timeout to 10 seconds (in microseconds)
-        ])
-        .outputOptions([
-          "-map 0:v:0",       // Use the video stream from the first input (looped video)
-          "-map 1:a:0",       // Use the audio stream from the live audio input
-          "-c:v libx264",     // Use H.264 codec for video encoding
-          "-preset veryfast", // Use veryfast preset for stability
-          "-profile:v baseline", // Use baseline profile for better compatibility
-          "-level 3.1",       // Set H.264 level for compatibility
-          "-b:v 4500k",       // Set video bitrate to 4500 Kbps (more conservative)
-          "-maxrate 5000k",   // Set maximum bitrate
-          "-bufsize 10000k",  // Set buffer size
-          "-r 30",            // Force 30 fps output
-          "-g 60",            // GOP size (keyframe every 2 seconds at 30fps)
-          "-c:a aac",         // Use AAC codec for audio encoding
-          "-b:a 128k",        // Set audio bitrate to 128 Kbps
-          "-ar 44100",        // Set audio sample rate to 44.1kHz
-          "-ac 2",            // Stereo audio (2 channels)
-          "-f flv",           // Output format for live streaming
-          "-flvflags no_duration_filesize", // FLV compatibility flags
-          "-avoid_negative_ts make_zero" // Handle timestamp issues
-        ])
-        .on("start", function (commandLine) {
-          const message = "✅ Stream started successfully!";
-          console.log("Stream starting...");
-          console.log("Spawned FFmpeg with command: " + commandLine);
-          if (telegramContext) telegramContext.reply(message);
-        })
-        .on("error", function (err, stdout, stderr) {
-          const message = `❌ Stream error: ${err.message}`;
-          console.error("=== FFmpeg Error Details ===");
-          console.error("Error message:", err.message);
-          console.error("Error code:", err.code);
-          console.error("Signal:", err.signal);
-          
-          if (stderr) {
-            console.error("=== FFmpeg stderr ===");
-            console.error(stderr);
-          }
-          
-          if (stdout) {
-            console.error("=== FFmpeg stdout ===");
-            console.error(stdout);
-          }
-          
-          console.error("=== End Error Details ===");
-          
-          if (telegramContext) telegramContext.reply(message);
-          
-          // Handle error gracefully
-          isStreaming = false;
-          
-          // Only restart if it's not a segmentation fault
-          if (err.signal !== 'SIGSEGV') {
-            setTimeout(() => {
-              if (!isStreaming) {
-                console.log("Attempting to restart stream...");
-                if (telegramContext) telegramContext.reply("🔄 Attempting to restart stream...");
-                startLivestream();
-              }
-            }, 15000); // Wait 15 seconds before restarting
-          } else {
-            console.error("Segmentation fault detected. Manual restart required.");
-            if (telegramContext) telegramContext.reply("💥 Critical error occurred. Please restart manually with 'stream' command.");
-          }
-        })
-        .on("end", function () {
-          console.log("Stream ended.");
-          isStreaming = false;
-          
-          if (telegramContext) telegramContext.reply("⏹️ Stream ended. Restarting in 2 seconds...");
-          
-          // Automatically restart the stream
-          setTimeout(() => {
-            console.log("Restarting stream...");
-            startFfmpegCommand();
-          }, 2000); // Wait 2 seconds before restarting
-        })
-        .on("progress", function (progress) {
-          // Optional: Log progress information (reduced frequency to avoid spam)
-          if (progress.timemark && progress.timemark.includes(':00:00')) {
-            console.log("Processing: " + progress.timemark + " processed");
-          }
-        })
-        .output(youtubeStreamUrl)
-        .run();
-    }
-
-    startFfmpegCommand();
-
-  } catch (error) {
-    const message = `Error in streamAudio function: ${error.message}`;
-    console.error(message);
-    if (telegramContext) telegramContext.reply(`❌ ${message}`);
-    isStreaming = false; // Reset streaming status on error
-  }
-}
-
-// Function to stop the stream
+/**
+ * Stops the livestream
+ */
 function stopLivestream(ctx = null) {
-  if (ffmpegProcess) {
-    const message = "⏹️ Stopping stream...";
-    console.log(message);
-    if (ctx) ctx.reply(message);
-    
-    ffmpegProcess.kill('SIGTERM'); // Use SIGTERM for a graceful shutdown
+  if (!ffmpegProcess) {
+    notify("ℹ️ No active stream to stop.", ctx);
+    return;
+  }
+
+  notify("⏹️ Stopping stream...", ctx);
+
+  try {
+    ffmpegProcess.kill("SIGTERM");
+
+    // Force kill if graceful shutdown fails
     setTimeout(() => {
       if (ffmpegProcess) {
         console.log("Force killing stream process...");
-        ffmpegProcess.kill('SIGKILL'); // Force kill if SIGTERM doesn't work
+        try {
+          ffmpegProcess.kill("SIGKILL");
+        } catch (e) {
+          console.log("Process already terminated");
+        }
       }
     }, 5000);
-    
-    ffmpegProcess = null;
-    isStreaming = false;
-    telegramContext = null; // Clear context
-    
-    const successMessage = "✅ Stream stopped successfully.";
-    console.log(successMessage);
-    if (ctx) ctx.reply(successMessage);
-  } else {
-    const message = "ℹ️ No active stream to stop.";
-    console.log(message);
-    if (ctx) ctx.reply(message);
+  } catch (error) {
+    console.error("Error stopping stream:", error.message);
   }
+
+  ffmpegProcess = null;
+  isStreaming = false;
+  telegramContext = null;
+
+  notify("✅ Stream stopped.", ctx);
 }
 
-// Function to get stream status
+/**
+ * Returns current stream status
+ */
 function getStreamStatus() {
   return {
     isStreaming,
-    hasProcess: !!ffmpegProcess
+    hasProcess: !!ffmpegProcess,
   };
 }
 
-// Handle process termination gracefully
-process.on('SIGINT', () => {
-  console.log('Received SIGINT, stopping stream...');
+// Graceful shutdown handlers
+process.on("SIGINT", () => {
+  console.log("\nShutting down gracefully...");
   stopLivestream();
-  process.exit(0);
+  setTimeout(() => process.exit(0), 1000);
 });
 
-process.on('SIGTERM', () => {
-  console.log('Received SIGTERM, stopping stream...');
+process.on("SIGTERM", () => {
+  console.log("Shutting down gracefully...");
   stopLivestream();
-  process.exit(0);
+  setTimeout(() => process.exit(0), 1000);
 });
 
-// Start the livestream only if called directly (not when imported)
+// Handle uncaught errors
+process.on("uncaughtException", (error) => {
+  console.error("Uncaught exception:", error);
+  stopLivestream();
+});
+
+// Auto-start if run directly
 if (import.meta.url === `file://${process.argv[1]}`) {
   startLivestream();
 }
